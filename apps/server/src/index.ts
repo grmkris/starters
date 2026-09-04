@@ -9,8 +9,11 @@ import type { ServerMessage } from "@agent-native/protocol";
 import { BunRuntime } from "@effect/platform-bun";
 import { Config, Context, Effect, Layer, Result } from "effect";
 
+import { createTickPacer } from "./tick-pacer";
+
 const TICK_RATE = 20;
 const FIXED_DELTA_SECONDS = 1 / TICK_RATE;
+const TICK_MS = 1000 / TICK_RATE;
 
 interface SocketData {
   clientId: ClientId;
@@ -159,9 +162,26 @@ const createRealtimeServer = (port: number): ServerResource => {
     },
   });
 
+  const pacer = createTickPacer(TICK_MS);
+  let previousFiring = performance.now();
+
   const interval = setInterval(() => {
-    simulation.step(FIXED_DELTA_SECONDS);
-    tick += 1;
+    const now = performance.now();
+    const owed = pacer.advance(now - previousFiring);
+    previousFiring = now;
+
+    if (owed === 0) {
+      return;
+    }
+
+    for (let step = 0; step < owed; step += 1) {
+      simulation.step(FIXED_DELTA_SECONDS);
+      tick += 1;
+    }
+
+    // Snapshots carry whole state rather than deltas, so a catch-up run
+    // broadcasts once at the tick it reached. Sending every intermediate world
+    // would only have clients overwrite each with the next in the same task.
     sequence += 1;
     broadcast({
       players: simulation.snapshot(),
@@ -171,7 +191,7 @@ const createRealtimeServer = (port: number): ServerResource => {
       type: "world.snapshot",
       v: 1,
     });
-  }, 1000 / TICK_RATE);
+  }, TICK_MS);
 
   return { interval, server };
 };
