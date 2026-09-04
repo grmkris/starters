@@ -26,6 +26,7 @@
     "test:contracts": "forge test --root packages/contracts",
     "knip": "knip",
     "graph": "bun tools/check-graph.ts",
+    "icons": "bun tools/icons.ts",
     "agents:check": "bun tools/check-agent-files.ts",
     "hooks:install": "lefthook install",
     "fix": "ultracite fix"

@@ -697,6 +697,14 @@
   --input: oklch(0.26 0.016 150);
   --ring: oklch(0.78 0.14 126);
   --radius: 0.35rem;
+  /* Mirrored once so every consumer reads one value, and so the resolved inset
+     is readable from JS. All four are 0px without viewport-fit=cover, and
+     legitimately 0px on a device with no notch and often in landscape - never
+     branch on one being greater than zero. */
+  --safe-area-inset-top: env(safe-area-inset-top);
+  --safe-area-inset-right: env(safe-area-inset-right);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom);
+  --safe-area-inset-left: env(safe-area-inset-left);
   --scene-void: #080b0c;
   --scene-key-light: #e6ffd0;
   --scene-grid: #26332d;
@@ -715,9 +723,16 @@ html {
   background: var(--background);
 }
 
+:where(*) {
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   min-width: 320px;
+  /* 100vh, not 100dvh: dvh reports the wrong height until layout settles on a
+     cold standalone launch, which is exactly when this is first painted. */
   min-height: 100vh;
+  text-size-adjust: 100%;
   margin: 0;
   background:
     linear-gradient(oklch(0.88 0.17 126 / 3%) 1px, transparent 1px),

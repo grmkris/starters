@@ -1,0 +1,36 @@
+{
+  "background_color": "#040705",
+  "description": "Agent-native TypeScript runtime for realtime and spatial software",
+  "display": "standalone",
+  "icons": [
+    {
+      "sizes": "192x192",
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "sizes": "512x512",
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "sizes": "1024x1024",
+      "src": "/icon-1024.png",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "sizes": "512x512",
+      "src": "/icon-maskable-512.png",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "/",
+  "name": "FIELD/01 — Agent Native Runtime",
+  "short_name": "FIELD/01",
+  "start_url": "/",
+  "theme_color": "#040705"
+}

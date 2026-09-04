@@ -8,9 +8,9 @@ import { WalletControl } from "./wallet-control";
 const navClassName = cn(buttonVariants({ size: "sm", variant: "ghost" }));
 
 export const AppShell = () => (
-  <div className="scanline min-h-screen">
+  <div className="scanline min-h-screen pb-[var(--safe-area-inset-bottom)]">
     <header className="bg-background/85 border-b backdrop-blur-xl">
-      <div className="mx-auto flex min-h-16 max-w-[1600px] items-center gap-2 px-4 sm:gap-5 sm:px-6">
+      <div className="mx-auto flex min-h-16 max-w-[1600px] items-center gap-2 px-4 pt-[var(--safe-area-inset-top)] sm:gap-5 sm:px-6">
         <Link className="flex min-w-0 items-baseline gap-3" to="/">
           <span className="text-primary font-mono text-xs tracking-[0.24em]">
             FIELD/01
