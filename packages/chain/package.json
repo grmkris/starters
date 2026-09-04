@@ -1,0 +1,19 @@
+{
+  "name": "@agent-native/chain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "effect": "4.0.0-rc.112",
+    "viem": "2.56.3"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  }
+}

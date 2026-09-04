@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "references": [
+    { "path": "./apps/web" },
+    { "path": "./apps/server" },
+    { "path": "./packages/ui" },
+    { "path": "./packages/domain" },
+    { "path": "./packages/protocol" },
+    { "path": "./packages/game-core" },
+    { "path": "./packages/game-three" },
+    { "path": "./packages/chain" },
+    { "path": "./packages/database" },
+    { "path": "./tools" },
+    { "path": "./e2e" }
+  ],
+  "compilerOptions": {
+    "strictNullChecks": true
+  }
+}

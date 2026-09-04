@@ -1,0 +1,10 @@
+{
+  "name": "@agent-native/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "forge build",
+    "typecheck": "forge build",
+    "test": "forge test"
+  }
+}

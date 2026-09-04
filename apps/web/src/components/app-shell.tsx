@@ -1,0 +1,46 @@
+import { Badge } from "@agent-native/ui/components/badge";
+import { buttonVariants } from "@agent-native/ui/components/button";
+import { cn } from "@agent-native/ui/lib/utils";
+import { Link, Outlet } from "@tanstack/react-router";
+
+import { WalletControl } from "./wallet-control";
+
+const navClassName = cn(buttonVariants({ size: "sm", variant: "ghost" }));
+
+export const AppShell = () => (
+  <div className="scanline min-h-screen">
+    <header className="bg-background/85 border-b backdrop-blur-xl">
+      <div className="mx-auto flex min-h-16 max-w-[1600px] items-center gap-2 px-4 sm:gap-5 sm:px-6">
+        <Link className="flex min-w-0 items-baseline gap-3" to="/">
+          <span className="text-primary font-mono text-xs tracking-[0.24em]">
+            FIELD/01
+          </span>
+          <span className="text-muted-foreground hidden text-sm md:inline">
+            agent-native runtime
+          </span>
+        </Link>
+        <nav aria-label="Primary" className="ml-auto flex items-center gap-1">
+          <Link
+            activeProps={{ "data-status": "active" }}
+            className={navClassName}
+            to="/"
+          >
+            Runtime
+          </Link>
+          <Link
+            activeProps={{ "data-status": "active" }}
+            className={navClassName}
+            to="/architecture"
+          >
+            Architecture
+          </Link>
+        </nav>
+        <Badge className="hidden sm:inline-flex" variant="outline">
+          TS7 · EFFECT 4 RC
+        </Badge>
+        <WalletControl />
+      </div>
+    </header>
+    <Outlet />
+  </div>
+);
