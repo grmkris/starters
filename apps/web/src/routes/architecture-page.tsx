@@ -3,9 +3,9 @@ import { Separator } from "@agent-native/ui/components/separator";
 
 const layers = [
   ["apps/web", "React shell, route composition, wallet and transport adapters"],
-  ["apps/server", "Bun process, Effect lifecycle, authoritative rooms"],
+  ["apps/server", "Bun process, Effect lifecycle, authoritative simulation"],
   ["packages/domain", "Schema-backed values and typed errors"],
-  ["packages/protocol", "Versioned HTTP and realtime wire contracts"],
+  ["packages/protocol", "Versioned realtime wire contracts"],
   ["packages/game-core", "Headless Koota simulation with a fixed timestep"],
   ["packages/game-three", "R3F renderer and interpolation adapter"],
   ["packages/chain", "Viem behind Effect services and validated addresses"],
