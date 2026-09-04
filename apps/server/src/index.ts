@@ -9,6 +9,7 @@ import type { ServerMessage } from "@agent-native/protocol";
 import { BunRuntime } from "@effect/platform-bun";
 import { Config, Context, Effect, Layer, Result } from "effect";
 
+import { createInputBuffer } from "./input-buffer";
 import { createTickPacer } from "./tick-pacer";
 
 const TICK_RATE = 20;
@@ -38,6 +39,7 @@ const send = (socket: RealtimeSocket, message: ServerMessage): void => {
 
 const createRealtimeServer = (port: number): ServerResource => {
   const simulation = createSimulation<ClientId>();
+  const inputs = createInputBuffer<ClientId>();
   const sockets = new Map<ClientId, RealtimeSocket>();
   let sequence = 0;
   let tick = 0;
@@ -130,7 +132,7 @@ const createRealtimeServer = (port: number): ServerResource => {
             break;
           }
           case "player.input": {
-            simulation.applyInput(socket.data.clientId, message.input);
+            inputs.capture(socket.data.clientId, message.input);
             break;
           }
           case "ping": {
@@ -174,7 +176,19 @@ const createRealtimeServer = (port: number): ServerResource => {
       return;
     }
 
+    const frame = inputs.drain();
+
     for (let step = 0; step < owed; step += 1) {
+      // Intent applies at the first boundary of a catch-up run. The Movement
+      // trait holds its value, so later steps continue in the same direction
+      // rather than consuming the frame a second time. Applying to a client
+      // that disconnected inside the window is already a no-op in game-core.
+      if (step === 0) {
+        for (const entry of frame) {
+          simulation.applyInput(entry.clientId, entry.input);
+        }
+      }
+
       simulation.step(FIXED_DELTA_SECONDS);
       tick += 1;
     }
