@@ -6,7 +6,7 @@ import tanstack from "ultracite/oxlint/tanstack";
 
 export default defineConfig({
   extends: [core, react, tanstack, antiSlop],
-  ignorePatterns: core.ignorePatterns,
+  ignorePatterns: [...core.ignorePatterns, "tools/spikes/**"],
   // Package boundaries are declared once in tools/graph.ts. Running them as a
   // lint rule puts them in the editor and in `check:fast`, not only in `check`.
   jsPlugins: ["./tools/oxlint/boundaries.ts"],
