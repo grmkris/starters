@@ -5,6 +5,28 @@ import type { Mesh } from "three";
 
 import type { WorldSource } from "./world-source";
 
+/**
+ * The render-side feel constants.
+ *
+ * Only values the renderer owns appear here. `MAX_SPEED` and the tick rate are
+ * server-authoritative, so a browser knob for them would desync the client from
+ * the world rather than tune it - the boundary is the point, not a limitation.
+ */
+export interface WorldFeel {
+  /** Exponential follow stiffness; higher snaps harder to the last snapshot. */
+  readonly followStiffness: number;
+  /** Yaw rate of the local player's cube, in radians per second. */
+  readonly localSpin: number;
+  /** Yaw rate of every other cube, in radians per second. */
+  readonly remoteSpin: number;
+}
+
+export const defaultWorldFeel: WorldFeel = {
+  followStiffness: 12,
+  localSpin: 0.7,
+  remoteSpin: -0.4,
+};
+
 export interface WorldPalette {
   readonly background: string;
   readonly grid: string;
@@ -18,6 +40,7 @@ export interface WorldPalette {
 
 interface PlayerMeshProps {
   readonly clientId: string;
+  readonly feel: WorldFeel;
   readonly isLocal: boolean;
   readonly palette: WorldPalette;
   readonly source: WorldSource;
@@ -25,6 +48,7 @@ interface PlayerMeshProps {
 
 const PlayerMesh = ({
   clientId,
+  feel,
   isLocal,
   palette,
   source,
@@ -37,11 +61,12 @@ const PlayerMesh = ({
       return;
     }
 
-    const blend = 1 - Math.exp(-12 * delta);
+    const blend = 1 - Math.exp(-feel.followStiffness * delta);
     mesh.current.position.x += (target.x - mesh.current.position.x) * blend;
     mesh.current.position.y += (target.y - mesh.current.position.y) * blend;
     mesh.current.position.z += (target.z - mesh.current.position.z) * blend;
-    mesh.current.rotation.y += delta * (isLocal ? 0.7 : -0.4);
+    mesh.current.rotation.y +=
+      delta * (isLocal ? feel.localSpin : feel.remoteSpin);
   });
 
   return (
@@ -59,12 +84,13 @@ const PlayerMesh = ({
 };
 
 interface SceneProps {
+  readonly feel: WorldFeel;
   readonly localClientId: string | null;
   readonly palette: WorldPalette;
   readonly source: WorldSource;
 }
 
-const Scene = ({ localClientId, palette, source }: SceneProps) => {
+const Scene = ({ feel, localClientId, palette, source }: SceneProps) => {
   const roster = useSyncExternalStore(
     source.subscribeRoster.bind(source),
     source.getRosterSnapshot.bind(source),
@@ -90,6 +116,7 @@ const Scene = ({ localClientId, palette, source }: SceneProps) => {
         <PlayerMesh
           key={clientId}
           clientId={clientId}
+          feel={feel}
           isLocal={clientId === localClientId}
           palette={palette}
           source={source}
@@ -115,6 +142,7 @@ const Scene = ({ localClientId, palette, source }: SceneProps) => {
 
 interface WorldCanvasProps {
   readonly className?: string;
+  readonly feel?: WorldFeel;
   readonly localClientId: string | null;
   readonly palette: WorldPalette;
   readonly source: WorldSource;
@@ -122,6 +150,7 @@ interface WorldCanvasProps {
 
 export const WorldCanvas = ({
   className,
+  feel = defaultWorldFeel,
   localClientId,
   palette,
   source,
@@ -133,7 +162,12 @@ export const WorldCanvas = ({
       gl={{ antialias: true, powerPreference: "high-performance" }}
       shadows
     >
-      <Scene localClientId={localClientId} palette={palette} source={source} />
+      <Scene
+        feel={feel}
+        localClientId={localClientId}
+        palette={palette}
+        source={source}
+      />
     </Canvas>
   </div>
 );

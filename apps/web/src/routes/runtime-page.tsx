@@ -1,5 +1,6 @@
 import type { ClientId } from "@agent-native/domain";
-import { WorldCanvas } from "@agent-native/game-three";
+import { defaultWorldFeel, WorldCanvas } from "@agent-native/game-three";
+import type { WorldFeel } from "@agent-native/game-three";
 import { Badge } from "@agent-native/ui/components/badge";
 import { Button } from "@agent-native/ui/components/button";
 import { Separator } from "@agent-native/ui/components/separator";
@@ -11,7 +12,14 @@ import {
 import { cn } from "@agent-native/ui/lib/utils";
 import { Effect, Fiber } from "effect";
 import { ActivityIcon, RadioTowerIcon, SendIcon } from "lucide-react";
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { Thumbstick } from "../components/thumbstick";
 import { useMovementInput } from "../hooks/use-movement-input";
@@ -20,11 +28,24 @@ import { realtimeStore } from "../lib/realtime-store";
 import { readScenePalette } from "../lib/scene-palette";
 import { realtimeUrl } from "../lib/socket-url";
 
+/**
+ * `import.meta.env.DEV` is replaced with a literal at build time, so the whole
+ * branch - and with it dialkit and motion - is eliminated from a production
+ * bundle rather than merely never rendered.
+ */
+const DevDials = import.meta.env.DEV
+  ? lazy(async () => {
+      const module = await import("../components/dev-dials");
+      return { default: module.DevDials };
+    })
+  : null;
+
 const formatClientId = (clientId: ClientId | null): string =>
   clientId === null ? "awaiting" : clientId.slice(0, 8);
 
 export const RuntimePage = () => {
   const palette = useMemo(() => readScenePalette(), []);
+  const [feel, setFeel] = useState<WorldFeel>(defaultWorldFeel);
   const meta = useSyncExternalStore(
     realtimeStore.subscribeMeta,
     realtimeStore.getMetaSnapshot,
@@ -64,6 +85,7 @@ export const RuntimePage = () => {
         >
           <WorldCanvas
             className="absolute inset-0"
+            feel={feel}
             localClientId={meta.clientId}
             palette={palette}
             source={realtimeStore}
@@ -89,6 +111,11 @@ export const RuntimePage = () => {
           <div className="pointer-events-none absolute right-4 bottom-4">
             <Thumbstick />
           </div>
+          {DevDials === null ? null : (
+            <Suspense fallback={null}>
+              <DevDials onChange={setFeel} />
+            </Suspense>
+          )}
         </section>
 
         <aside className="bg-background/80 flex flex-col border-t p-5 lg:border-t-0 lg:border-l">

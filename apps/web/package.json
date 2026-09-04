@@ -36,6 +36,8 @@
     "@types/react": "19.2.15",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.1.1",
+    "dialkit": "1.4.3",
+    "motion": "13.2.0",
     "typescript": "7.0.2",
     "vite": "8.2.2"
   }
