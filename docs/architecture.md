@@ -38,4 +38,4 @@ Entity identifiers are TypeIDs — prefixed, UUIDv7-backed, sortable strings dec
 
 ## Adding a package
 
-Add a workspace only when it owns a stable boundary or independently testable capability. A directory that merely splits types, constants, helpers, or one implementation adds context cost without architectural value. Update `tools/check-boundaries.ts` when a new package creates a dependency rule worth enforcing.
+Add a workspace only when it owns a stable boundary or independently testable capability. A directory that merely splits types, constants, helpers, or one implementation adds context cost without architectural value. Add it to `tools/graph.ts`; `bun run graph` fails on a workspace that is not declared there.

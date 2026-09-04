@@ -7,8 +7,8 @@ pre-commit:
       stage_fixed: true
     lint:
       run: bun run lint
-    boundaries:
-      run: bun run boundaries
+    graph:
+      run: bun run graph
 
 pre-push:
   commands:

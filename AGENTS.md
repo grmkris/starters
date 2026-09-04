@@ -32,7 +32,7 @@ User instructions override repository skills. Skills inform implementation; they
 - `apps/server`: Bun process and Effect lifecycle; it owns authoritative rooms.
 - `apps/web`: composition root for React, TanStack Router, transport adapters, and wagmi.
 
-`bun run boundaries` enforces the critical import rules. Do not weaken a global rule to resolve one local inconvenience.
+These rules are declared in `tools/graph.ts`. `bun run lint` reports a violating import as a lint error, and `bun run graph` checks the whole-repository properties: that every workspace is declared, that declared edges match each manifest, and that an unreferenced package explains itself. Widen a boundary by editing that declaration and recording why, not by working around it. Do not weaken a global rule to resolve one local inconvenience.
 
 ## Runtime invariants
 
