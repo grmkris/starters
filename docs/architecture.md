@@ -25,6 +25,10 @@ The solid arrows are current imports and point from consumers to dependencies. D
 
 Application UI state may use React or Effect Atom when a feature needs it. Persistent application data belongs in Postgres/Drizzle. Neither database synchronization nor React state belongs in the simulation tick.
 
+## Identifiers
+
+Entity identifiers are TypeIDs — prefixed, UUIDv7-backed, sortable strings declared once in `packages/domain/src/id.ts`. A single declaration yields the Effect Schema used on the wire, the branded type, the Drizzle column default, and the UUID conversion, so an identifier cannot mean one thing in transport and another in storage. `docs/decisions/0002-typeid-identifiers.md` records why.
+
 ## Capability boundaries
 
 - HTTP and WebSocket are transport adapters around shared contracts. Effect owns their lifecycle, errors, retry policy, and configuration.

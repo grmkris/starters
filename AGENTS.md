@@ -39,6 +39,7 @@ User instructions override repository skills. Skills inform implementation; they
 - Effect owns I/O, configuration, failures, retries, resources, and service lifecycles.
 - Effect Schema is the application contract language. Do not add Zod for domain, HTTP, realtime, config, or chain boundaries.
 - Every wire message has an explicit version and is decoded before use.
+- Entity identifiers are TypeIDs declared in `packages/domain/src/id.ts`. Add an entity by adding one `makeIdSchema` pair there; never introduce a bare `string` id or a second prefix registry.
 - Clients send input/intents; the server owns shared simulation state.
 - Simulation uses a fixed timestep. Rendering interpolates independently.
 - React state is for application UI, not per-frame transforms.
