@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { LOBBY_ROOM_ID, PROTOCOL_VERSION } from "@agent-native/domain";
+import { LOBBY_ROOM_ID, PROTOCOL_VERSION, RoomId } from "@agent-native/domain";
 
 import { sendRaw, startHarness } from "./harness";
 import type { Harness } from "./harness";
@@ -33,8 +33,9 @@ describe("realtime protocol loop", () => {
     expect(welcome.v).toBe(PROTOCOL_VERSION);
     expect(welcome.tickRate).toBeGreaterThan(0);
     expect(welcome.clientId).toMatch(/^cli_/u);
-    // Today the server names a room the client never chose. Rooms change this.
-    expect(welcome.roomId).toBe(LOBBY_ROOM_ID);
+    // Identity only. The connection is somewhere once it asks to be, not
+    // because the upgrade seeded a room it never chose.
+    expect(welcome.resumeToken).toMatch(/^[0-9a-f]{32}$/u);
 
     await client.close();
   });
@@ -91,13 +92,11 @@ describe("realtime protocol loop", () => {
     expect(failure).toContain("invalid_message");
   });
 
-  test("announces presence to everyone already connected", async () => {
-    const first = await harness.connect();
-    await first.next("session.welcome");
+  test("announces presence to everyone already in the room", async () => {
+    const { client: first } = await harness.join(LOBBY_ROOM_ID);
     await first.next("room.presence");
 
-    const second = await harness.connect();
-    await second.next("session.welcome");
+    const { client: second } = await harness.join(LOBBY_ROOM_ID);
 
     // The join is observed by the client that was already there.
     const presence = await first.next("room.presence");
@@ -108,12 +107,10 @@ describe("realtime protocol loop", () => {
   });
 
   test("announces presence again when a client leaves", async () => {
-    const first = await harness.connect();
-    await first.next("session.welcome");
-    const second = await harness.connect();
-    await second.next("session.welcome");
+    const { client: first } = await harness.join(LOBBY_ROOM_ID);
+    const { client: second } = await harness.join(LOBBY_ROOM_ID);
 
-    // Three broadcasts reach `first`: its own open, the join, then the leave.
+    // Three broadcasts reach `first`: its own join, the second join, the leave.
     const alone = await first.next("room.presence");
     const joined = await first.next("room.presence");
     expect(alone.connected).toBe(1);
@@ -143,14 +140,57 @@ describe("realtime protocol loop", () => {
   });
 
   test("advances the simulation and broadcasts a world", async () => {
-    const client = await harness.connect();
-    const welcome = await client.next("session.welcome");
+    const { client, clientId } = await harness.join(LOBBY_ROOM_ID);
     const snapshot = await client.next("world.snapshot");
 
     expect(snapshot.tick).toBeGreaterThan(0);
+    expect(snapshot.roomId).toBe(LOBBY_ROOM_ID);
     expect(snapshot.players.map((player) => player.clientId)).toContain(
-      welcome.clientId
+      clientId
     );
+
+    await client.close();
+  });
+
+  test("sends no world to a connection that has not joined", async () => {
+    const client = await harness.connect();
+    await client.next("session.welcome");
+
+    // A roomless socket belongs to no room's set, so nothing is broadcast to
+    // it. That is what makes "connected, no room" an honest state to render.
+    client.send({
+      input: { x: 1, z: 0 },
+      seq: 1,
+      type: "player.input",
+      v: PROTOCOL_VERSION,
+    });
+    const failure = await client.next("protocol.error");
+
+    expect(failure.code).toBe("not_in_room");
+    expect(
+      client.received.some((message) => message.type === "world.snapshot")
+    ).toBe(false);
+
+    await client.close();
+  });
+
+  test("refuses a second join rather than moving the socket silently", async () => {
+    const { client } = await harness.join(LOBBY_ROOM_ID);
+
+    client.send({
+      roomId: RoomId.generate(),
+      seq: 2,
+      type: "room.join",
+      v: PROTOCOL_VERSION,
+    });
+    const rejection = await client.next("room.rejected");
+
+    expect(rejection.reason).toBe("already_in_room");
+
+    // Rejection is about membership, not transport: the socket still works.
+    client.send({ sentAt: 7, seq: 3, type: "ping", v: PROTOCOL_VERSION });
+    const pong = await client.next("pong");
+    expect(pong.sentAt).toBe(7);
 
     await client.close();
   });

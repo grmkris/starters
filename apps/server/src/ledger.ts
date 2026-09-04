@@ -5,6 +5,7 @@ import {
   MovementInput,
   PlayerSnapshot,
   ProtocolVersion,
+  RoomId,
 } from "@agent-native/domain";
 import { Schema } from "effect";
 
@@ -16,7 +17,7 @@ import { Schema } from "effect";
  * else; a ledger is read back long after the process that wrote it, so the two
  * move for different reasons and a shared literal would couple them.
  */
-export const LEDGER_FORMAT = 1 as const;
+export const LEDGER_FORMAT = 2 as const;
 
 const CapturedInput = Schema.Struct({
   clientId: ClientId,
@@ -30,11 +31,17 @@ const CapturedInput = Schema.Struct({
  * record: a spawn offset is derived from how many players were present at the
  * moment of the join, so a replay reproduces it by applying the events in the
  * order they were written rather than by reconstructing a timestamp.
+ *
+ * That argument only holds while a file describes one room. Once the world is
+ * sharded, "how many players were present" is a per-room count, and a single
+ * interleaved stream would make it ambiguous - so a ledger is per room, named
+ * by the room in its header, rather than gaining a roomId on every event.
  */
 const LedgerRecord = Schema.Union([
   Schema.Struct({
     format: Schema.Literals([LEDGER_FORMAT]),
     protocol: ProtocolVersion,
+    roomId: RoomId,
     startedAt: Schema.Int,
     tickRate: Schema.Int,
     type: Schema.Literals(["ledger.header"]),
@@ -67,9 +74,13 @@ export interface Ledger {
   readonly close: () => Promise<void>;
 }
 
-export const createLedger = (directory: string, startedAt: number): Ledger => {
+export const createLedger = (
+  directory: string,
+  roomId: RoomId,
+  startedAt: number
+): Ledger => {
   mkdirSync(directory, { recursive: true });
-  const sink = Bun.file(`${directory}/room-${startedAt}.ndjson`).writer();
+  const sink = Bun.file(`${directory}/${roomId}-${startedAt}.ndjson`).writer();
 
   return {
     // `encodeLedgerRecord` throws on an unencodable record, as the wire codec

@@ -1,34 +1,31 @@
-import { ClientId, LOBBY_ROOM_ID } from "@agent-native/domain";
-import type { RoomId } from "@agent-native/domain";
-import { createSimulation } from "@agent-native/game-core";
-import type { PlayerState } from "@agent-native/game-core";
+import { ClientId, makeResumeToken } from "@agent-native/domain";
+import type {
+  ClientId as ClientIdType,
+  ResumeToken,
+} from "@agent-native/domain";
 import {
   decodeClientMessage,
   encodeServerMessage,
 } from "@agent-native/protocol";
-import type { ServerMessage } from "@agent-native/protocol";
+import type { ServerMessageBody } from "@agent-native/protocol";
 import { BunRuntime } from "@effect/platform-bun";
 import { Config, Context, Effect, Layer, Option, Result } from "effect";
 
-import { createInputBuffer } from "./input-buffer";
-import { createLedger, LEDGER_FORMAT } from "./ledger";
-import type { Ledger } from "./ledger";
+import { createRooms } from "./rooms";
+import type { RealtimeSocket, Room, SocketData } from "./rooms";
 import { createTickPacer } from "./tick-pacer";
 
 const TICK_RATE = 20;
 const FIXED_DELTA_SECONDS = 1 / TICK_RATE;
 const TICK_MS = 1000 / TICK_RATE;
-
-interface SocketData {
-  clientId: ClientId;
-  roomId: RoomId;
-}
-
-type RealtimeSocket = Bun.ServerWebSocket<SocketData>;
+const ROOM_CAPACITY = 16;
+/** Bounded by Koota's pool of 16 world ids; see rooms.ts. */
+const MAX_ROOMS = 12;
+/** How long a disconnected client may reclaim its identity. */
+const RESUME_TTL_MS = 60_000;
 
 export interface ServerResource {
   readonly interval: ReturnType<typeof setInterval>;
-  readonly ledger: Ledger | null;
   readonly server: Bun.Server<SocketData>;
   /** Releases every resource the server holds, including the ECS world. */
   readonly dispose: () => Promise<void>;
@@ -39,8 +36,17 @@ const responseHeaders = {
   "content-type": "application/json; charset=utf-8",
 };
 
-const send = (socket: RealtimeSocket, message: ServerMessage): void => {
-  socket.send(encodeServerMessage(message));
+/**
+ * Stamps the sequence number as it sends.
+ *
+ * `seq` counts messages on one connection, so only the sender can know it.
+ * Taking a body without one means no caller can supply a wrong value and the
+ * counter has exactly one writer. Over a single ordered socket a gap is
+ * therefore always a bug rather than expected loss.
+ */
+const send = (socket: RealtimeSocket, body: ServerMessageBody): void => {
+  socket.data.seq += 1;
+  socket.send(encodeServerMessage({ ...body, seq: socket.data.seq }));
 };
 
 /**
@@ -52,40 +58,62 @@ export const createRealtimeServer = (
   port: number,
   ledgerDirectory: string | null
 ): ServerResource => {
-  const startedAt = Date.now();
-  const ledger =
-    ledgerDirectory === null ? null : createLedger(ledgerDirectory, startedAt);
-
-  ledger?.record({
-    format: LEDGER_FORMAT,
-    protocol: 1,
-    startedAt,
+  const rooms = createRooms({
+    capacity: ROOM_CAPACITY,
+    ledgerDirectory,
+    maxRooms: MAX_ROOMS,
     tickRate: TICK_RATE,
-    type: "ledger.header",
   });
 
-  const simulation = createSimulation<ClientId>();
-  const inputs = createInputBuffer<ClientId>();
-  const sockets = new Map<ClientId, RealtimeSocket>();
-  let sequence = 0;
-  let tick = 0;
+  /**
+   * Identities a disconnected client may reclaim, and the secret that proves
+   * the claim. Entries expire so a token cannot be redeemed indefinitely and
+   * the map cannot grow without bound.
+   */
+  const resumable = new Map<
+    ClientIdType,
+    { readonly token: ResumeToken; readonly expiresAt: number }
+  >();
 
-  const broadcast = (message: ServerMessage): void => {
-    const encoded = encodeServerMessage(message);
-    for (const socket of sockets.values()) {
-      socket.send(encoded);
+  const rememberIdentity = (
+    socket: RealtimeSocket,
+    token: ResumeToken
+  ): void => {
+    resumable.set(socket.data.clientId, {
+      expiresAt: Date.now() + RESUME_TTL_MS,
+      token,
+    });
+  };
+
+  const reclaim = (clientId: ClientIdType, token: ResumeToken): boolean => {
+    const entry = resumable.get(clientId);
+    if (entry === undefined) {
+      return false;
+    }
+    resumable.delete(clientId);
+    return entry.token === token && entry.expiresAt > Date.now();
+  };
+
+  const broadcast = (room: Room, body: ServerMessageBody): void => {
+    for (const member of room.sockets) {
+      send(member, body);
     }
   };
 
-  const broadcastPresence = (): void => {
-    sequence += 1;
-    broadcast({
-      connected: sockets.size,
-      roomId: LOBBY_ROOM_ID,
-      seq: sequence,
+  const announcePresence = (room: Room): void => {
+    broadcast(room, {
+      connected: room.sockets.size,
+      roomId: room.id,
       type: "room.presence",
       v: 1,
     });
+  };
+
+  const departed = (socket: RealtimeSocket): void => {
+    const room = rooms.leave(socket);
+    if (room !== null) {
+      announcePresence(room);
+    }
   };
 
   const server = Bun.serve<SocketData>({
@@ -97,8 +125,7 @@ export const createRealtimeServer = (
           {
             status: "ok",
             runtime: "bun",
-            connections: sockets.size,
-            tick,
+            rooms: rooms.count(),
           },
           { headers: responseHeaders }
         );
@@ -106,10 +133,7 @@ export const createRealtimeServer = (
 
       if (url.pathname === "/realtime") {
         const upgraded = bunServer.upgrade(request, {
-          data: {
-            clientId: ClientId.generate(),
-            roomId: LOBBY_ROOM_ID,
-          },
+          data: { clientId: ClientId.generate(), roomId: null, seq: 0 },
         });
         return upgraded
           ? undefined
@@ -131,26 +155,17 @@ export const createRealtimeServer = (
     port,
     websocket: {
       close(socket) {
-        sockets.delete(socket.data.clientId);
-        simulation.removePlayer(socket.data.clientId);
-        ledger?.record({
-          clientId: socket.data.clientId,
-          type: "session.closed",
-        });
-        broadcastPresence();
+        departed(socket);
       },
       message(socket, rawMessage) {
-        const text = rawMessage.toString();
-        const decoded = decodeClientMessage(text);
+        const decoded = decodeClientMessage(rawMessage.toString());
 
         if (Result.isFailure(decoded)) {
-          sequence += 1;
           send(socket, {
-            v: 1,
-            seq: sequence,
-            type: "protocol.error",
             code: "invalid_message",
             message: decoded.failure.message,
+            type: "protocol.error",
+            v: 1,
           });
           return;
         }
@@ -158,42 +173,87 @@ export const createRealtimeServer = (
         const message = decoded.success;
         switch (message.type) {
           case "room.join": {
-            socket.data.roomId = message.roomId;
+            // An identity is reclaimed before the join, so the entity spawns
+            // under the id the client keeps rather than one it must adopt.
+            if (
+              message.resume !== undefined &&
+              reclaim(message.resume.clientId, message.resume.resumeToken)
+            ) {
+              socket.data.clientId = message.resume.clientId;
+            }
+
+            const outcome = rooms.join(socket, message.roomId);
+            if (outcome.kind === "rejected") {
+              // Membership failed, not the transport: the socket stays open so
+              // a client can pick another room without a reconnect.
+              send(socket, {
+                reason: outcome.reason,
+                roomId: message.roomId,
+                type: "room.rejected",
+                v: 1,
+              });
+              return;
+            }
+
+            send(socket, {
+              capacity: outcome.room.capacity,
+              connected: outcome.room.sockets.size,
+              roomId: outcome.room.id,
+              type: "room.joined",
+              v: 1,
+            });
+            announcePresence(outcome.room);
+            break;
+          }
+          case "room.leave": {
+            const { roomId } = socket.data;
+            if (roomId === null) {
+              send(socket, {
+                code: "not_in_room",
+                message: "This connection is not in a room",
+                type: "protocol.error",
+                v: 1,
+              });
+              return;
+            }
+            departed(socket);
+            send(socket, {
+              reason: "client_request",
+              roomId,
+              type: "room.left",
+              v: 1,
+            });
             break;
           }
           case "player.input": {
-            inputs.capture(socket.data.clientId, message.input);
+            if (!rooms.capture(socket, message.input)) {
+              send(socket, {
+                code: "not_in_room",
+                message: "Input arrived before a room was joined",
+                type: "protocol.error",
+                v: 1,
+              });
+            }
             break;
           }
           case "ping": {
-            sequence += 1;
-            send(socket, {
-              v: 1,
-              seq: sequence,
-              type: "pong",
-              sentAt: message.sentAt,
-            });
+            send(socket, { sentAt: message.sentAt, type: "pong", v: 1 });
             break;
           }
         }
       },
       open(socket) {
-        sockets.set(socket.data.clientId, socket);
-        simulation.spawnPlayer(socket.data.clientId);
-        ledger?.record({
-          clientId: socket.data.clientId,
-          type: "session.opened",
-        });
-        sequence += 1;
+        const token = makeResumeToken();
+        rememberIdentity(socket, token);
+        // Identity only. Membership begins at `room.join`, so this names no
+        // room: a connection is somewhere only once it has asked to be.
         send(socket, {
-          v: 1,
-          seq: sequence,
-          type: "session.welcome",
           clientId: socket.data.clientId,
-          roomId: socket.data.roomId,
+          resumeToken: token,
           tickRate: TICK_RATE,
+          type: "session.welcome",
+          v: 1,
         });
-        broadcastPresence();
       },
     },
   });
@@ -210,58 +270,29 @@ export const createRealtimeServer = (
       return;
     }
 
-    const frame = inputs.drain();
-    let players: readonly PlayerState<ClientId>[] = [];
-
-    for (let step = 0; step < owed; step += 1) {
-      // Intent applies at the first boundary of a catch-up run. The Movement
-      // trait holds its value, so later steps continue in the same direction
-      // rather than consuming the frame a second time. Applying to a client
-      // that disconnected inside the window is already a no-op in game-core.
-      if (step === 0) {
-        for (const entry of frame) {
-          simulation.applyInput(entry.clientId, entry.input);
-        }
-      }
-
-      simulation.step(FIXED_DELTA_SECONDS);
-      tick += 1;
-      players = simulation.snapshot();
-
-      ledger?.record({
-        inputs: step === 0 ? frame : [],
+    // One clock for every room. N intervals would be N drifting clocks and N
+    // teardown paths to miss; the cost of walking a map of at most MAX_ROOMS
+    // entries at 20Hz is nil.
+    for (const { players, room } of rooms.advance(owed, FIXED_DELTA_SECONDS)) {
+      // Snapshots carry whole state rather than deltas, so a catch-up run
+      // broadcasts once at the tick it reached.
+      broadcast(room, {
         players,
-        tick,
-        type: "tick",
+        roomId: room.id,
+        tick: room.tick,
+        type: "world.snapshot",
+        v: 1,
       });
     }
-
-    // Snapshots carry whole state rather than deltas, so a catch-up run
-    // broadcasts once at the tick it reached. Sending every intermediate world
-    // would only have clients overwrite each with the next in the same task.
-    sequence += 1;
-    broadcast({
-      players,
-      roomId: LOBBY_ROOM_ID,
-      seq: sequence,
-      tick,
-      type: "world.snapshot",
-      v: 1,
-    });
   }, TICK_MS);
 
   const dispose = async (): Promise<void> => {
     clearInterval(interval);
     await server.stop(true);
-    await ledger?.close();
-    // Koota allocates world ids from a fixed pool of 16 and only returns one on
-    // destroy, so a process that builds worlds without releasing them stops
-    // being able to build them at all. Harmless while a process held exactly
-    // one world for its lifetime; not harmless once a room owns a world.
-    simulation.world.destroy();
+    await rooms.disposeAll();
   };
 
-  return { dispose, interval, ledger, server };
+  return { dispose, interval, server };
 };
 
 class RealtimeServer extends Context.Service<

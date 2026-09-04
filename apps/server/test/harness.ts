@@ -1,3 +1,5 @@
+import { PROTOCOL_VERSION } from "@agent-native/domain";
+import type { ClientId, ResumeToken, RoomId } from "@agent-native/domain";
 import {
   decodeServerMessage,
   encodeClientMessage,
@@ -49,11 +51,19 @@ export interface TestClient {
   readonly close: () => Promise<void>;
 }
 
+interface JoinedClient {
+  readonly client: TestClient;
+  readonly clientId: ClientId;
+  readonly resumeToken: ResumeToken;
+}
+
 export interface Harness {
   readonly url: string;
   readonly port: number;
   readonly resource: ServerResource;
   readonly connect: () => Promise<TestClient>;
+  /** Connects, waits for identity, joins `roomId`, waits for the acknowledgement. */
+  readonly join: (roomId: RoomId) => Promise<JoinedClient>;
   readonly close: () => Promise<void>;
 }
 
@@ -206,6 +216,22 @@ export const startHarness = (
       await resource.dispose();
     },
     connect: async () => await connectClient(`ws://127.0.0.1:${port}/realtime`),
+    join: async (roomId) => {
+      const client = await connectClient(`ws://127.0.0.1:${port}/realtime`);
+      const welcome = await client.next("session.welcome");
+      client.send({
+        roomId,
+        seq: 1,
+        type: "room.join",
+        v: PROTOCOL_VERSION,
+      });
+      await client.next("room.joined");
+      return {
+        client,
+        clientId: welcome.clientId,
+        resumeToken: welcome.resumeToken,
+      };
+    },
     port,
     resource,
     url: `ws://127.0.0.1:${port}/realtime`,

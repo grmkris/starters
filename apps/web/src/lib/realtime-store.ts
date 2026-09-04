@@ -118,6 +118,26 @@ export class RealtimeStore implements WorldSource {
         this.#updateMeta({ connected: message.connected });
         break;
       }
+      // Membership now begins at `room.join` rather than at the upgrade, so
+      // these three describe a room lifecycle this store does not yet model.
+      // Modelling it belongs with the connection state machine, not here; a
+      // refusal is surfaced because the operator should see it, and the other
+      // two are acknowledged rather than silently dropped.
+      case "room.joined": {
+        this.#updateMeta({ connected: message.connected, status: "live" });
+        break;
+      }
+      case "room.left": {
+        this.#clearWorld();
+        break;
+      }
+      case "room.rejected": {
+        this.#updateMeta({
+          lastError: `Room refused the connection: ${message.reason}`,
+          status: "error",
+        });
+        break;
+      }
       case "world.snapshot": {
         this.#applyWorldSnapshot(message);
         break;
@@ -142,7 +162,6 @@ export class RealtimeStore implements WorldSource {
     this.#lastInput = input;
     this.#send({
       input,
-      roomId: LOBBY_ROOM_ID,
       seq: this.#nextSequence(),
       type: "player.input",
       v: PROTOCOL_VERSION,

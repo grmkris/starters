@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { ClientId } from "@agent-native/domain";
+import { ClientId, LOBBY_ROOM_ID } from "@agent-native/domain";
 import { createSimulation } from "@agent-native/game-core";
 
 import { encodeLedgerRecord, LEDGER_FORMAT } from "../src/ledger";
@@ -32,6 +32,7 @@ const recordSession = () => {
     {
       format: LEDGER_FORMAT,
       protocol: 1,
+      roomId: LOBBY_ROOM_ID,
       startedAt: 0,
       tickRate: TICK_RATE,
       type: "ledger.header",
