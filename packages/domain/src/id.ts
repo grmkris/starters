@@ -111,7 +111,12 @@ export const makeIdSchema = <
     is,
     fromUuid: (uuid: string): TypeId<Prefix, Name> =>
       assertId(TypeID.fromUUID(prefix, uuid).toString()),
-    toUuid: (id: TypeId<Prefix, Name>): string => toUUID(fromString(id)),
+    // Prefix-checked on the way out as well as in. The branded parameter is a
+    // compile-time guarantee only, and this is the last checkpoint before a
+    // database driver: an identifier from another entity reaching here would
+    // otherwise write a valid-looking row under the wrong key.
+    toUuid: (id: TypeId<Prefix, Name>): string =>
+      toUUID(fromString(id, prefix)),
   });
 };
 
