@@ -2,14 +2,8 @@ import { Schema } from "effect";
 
 import { ClientId } from "./id";
 
-export {
-  ClientId,
-  LOBBY_ROOM_ID,
-  makeIdSchema,
-  parseTypeId,
-  RoomId,
-} from "./id";
-export type { IdSchema, TypeId, TypeIdParts } from "./id";
+export { ClientId, LOBBY_ROOM_ID, makeIdSchema, RoomId } from "./id";
+export type { IdSchema, TypeId } from "./id";
 
 export const PROTOCOL_VERSION = 1 as const;
 

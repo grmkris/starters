@@ -15,7 +15,7 @@
 
 import { Schema } from "effect";
 import type { Brand } from "effect";
-import { TypeID, fromString, getType, toUUID, typeid } from "typeid-js";
+import { TypeID, fromString, toUUID, typeid } from "typeid-js";
 
 /** Base32-encoded UUIDv7 suffix length, fixed by the TypeID specification. */
 const SUFFIX_LENGTH = 26;
@@ -118,18 +118,6 @@ export const makeIdSchema = <
     toUuid: (id: TypeId<Prefix, Name>): string =>
       toUUID(fromString(id, prefix)),
   });
-};
-
-/** The two halves any TypeID decomposes into. */
-export interface TypeIdParts {
-  readonly prefix: string;
-  readonly uuid: string;
-}
-
-/** Splits any TypeID into its prefix and the UUID it encodes. */
-export const parseTypeId = (input: string): TypeIdParts => {
-  const parsed = fromString(input);
-  return { prefix: getType(parsed), uuid: toUUID(parsed) };
 };
 
 // ---------------------------------------------------------------------------

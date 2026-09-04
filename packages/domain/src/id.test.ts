@@ -2,13 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import { Schema } from "effect";
 
-import {
-  ClientId,
-  LOBBY_ROOM_ID,
-  makeIdSchema,
-  parseTypeId,
-  RoomId,
-} from "./id";
+import { ClientId, LOBBY_ROOM_ID, makeIdSchema, RoomId } from "./id";
 
 describe("makeIdSchema", () => {
   it("generates prefixed identifiers of the specification length", () => {
@@ -48,14 +42,6 @@ describe("makeIdSchema", () => {
   it("round-trips through its UUID representation", () => {
     const id = RoomId.generate();
     expect(RoomId.fromUuid(RoomId.toUuid(id))).toBe(id);
-  });
-
-  it("reports the prefix and UUID of an arbitrary identifier", () => {
-    const id = ClientId.generate();
-    expect(parseTypeId(id)).toEqual({
-      prefix: "cli",
-      uuid: ClientId.toUuid(id),
-    });
   });
 
   it("refuses to register a prefix a another identifier already claimed", () => {
