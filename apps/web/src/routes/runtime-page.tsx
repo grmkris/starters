@@ -17,9 +17,7 @@ import { realtimeProgram } from "../lib/realtime-client";
 import { realtimeStore } from "../lib/realtime-store";
 import type { ConnectionStatus } from "../lib/realtime-store";
 import { readScenePalette } from "../lib/scene-palette";
-
-const websocketUrl =
-  import.meta.env.VITE_WS_URL ?? "ws://localhost:3001/realtime";
+import { realtimeUrl } from "../lib/socket-url";
 
 const MOVEMENT_KEYS = new Set(["a", "d", "s", "w"]);
 
@@ -100,7 +98,7 @@ export const RuntimePage = () => {
   );
 
   useEffect(() => {
-    const fiber = Effect.runFork(realtimeProgram(realtimeStore, websocketUrl));
+    const fiber = Effect.runFork(realtimeProgram(realtimeStore, realtimeUrl()));
     return () => {
       Effect.runFork(Fiber.interrupt(fiber));
     };
