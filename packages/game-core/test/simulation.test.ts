@@ -17,6 +17,34 @@ describe("authoritative simulation", () => {
     ]);
   });
 
+  test("orders the snapshot canonically rather than by arrival", () => {
+    const simulation = createSimulation();
+    simulation.spawnPlayer("player-c");
+    simulation.spawnPlayer("player-a");
+    simulation.spawnPlayer("player-b");
+
+    expect(simulation.snapshot().map((player) => player.clientId)).toEqual([
+      "player-a",
+      "player-b",
+      "player-c",
+    ]);
+  });
+
+  test("keeps snapshot order stable when a player leaves and rejoins", () => {
+    const simulation = createSimulation();
+    simulation.spawnPlayer("player-a");
+    simulation.spawnPlayer("player-b");
+    simulation.removePlayer("player-a");
+    simulation.spawnPlayer("player-a");
+
+    // Insertion order now ends with player-a, so an unsorted snapshot would
+    // report the world differently before and after a reconnect.
+    expect(simulation.snapshot().map((player) => player.clientId)).toEqual([
+      "player-a",
+      "player-b",
+    ]);
+  });
+
   test("removes disconnected players", () => {
     const simulation = createSimulation();
     simulation.spawnPlayer("player-1");

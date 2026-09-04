@@ -97,7 +97,15 @@ export const createSimulation = <
         position: { x: position.x, y: position.y, z: position.z },
       });
     }
-    return state;
+
+    // Sorted so the array is a canonical view of the world rather than a record
+    // of arrival. Map iteration follows insertion order, so two simulations
+    // holding identical state that saw their joins in a different order would
+    // otherwise produce different snapshots, and anything comparing snapshots -
+    // a replay checking itself tick by tick - would read that as a divergence.
+    return state.toSorted((left, right) =>
+      left.clientId < right.clientId ? -1 : 1
+    );
   };
 
   return { applyInput, removePlayer, snapshot, spawnPlayer, step, world };
