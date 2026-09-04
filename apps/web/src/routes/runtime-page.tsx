@@ -1,4 +1,4 @@
-import type { ClientId } from "@agent-native/domain";
+import type { ClientId, MovementInput } from "@agent-native/domain";
 import { WorldCanvas } from "@agent-native/game-three";
 import { Badge } from "@agent-native/ui/components/badge";
 import { Button } from "@agent-native/ui/components/button";
@@ -8,42 +8,84 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@agent-native/ui/components/tooltip";
+import { cn } from "@agent-native/ui/lib/utils";
 import { Effect, Fiber } from "effect";
 import { ActivityIcon, RadioTowerIcon, SendIcon } from "lucide-react";
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
 import { realtimeProgram } from "../lib/realtime-client";
 import { realtimeStore } from "../lib/realtime-store";
+import type { ConnectionStatus } from "../lib/realtime-store";
 import { readScenePalette } from "../lib/scene-palette";
 
 const websocketUrl =
   import.meta.env.VITE_WS_URL ?? "ws://localhost:3001/realtime";
 
-const useMovementInput = (): void => {
+const MOVEMENT_KEYS = new Set(["a", "d", "s", "w"]);
+
+const vectorOf = (pressed: ReadonlySet<string>): MovementInput => ({
+  x: Number(pressed.has("d")) - Number(pressed.has("a")),
+  z: Number(pressed.has("s")) - Number(pressed.has("w")),
+});
+
+const useMovementInput = (status: ConnectionStatus): void => {
+  const pressed = useRef(new Set<string>());
+
   useEffect(() => {
-    const pressed = new Set<string>();
+    const keys = pressed.current;
+
+    const onKeyChange = (event: KeyboardEvent, held: boolean): void => {
+      const key = event.key.toLowerCase();
+      if (!MOVEMENT_KEYS.has(key)) {
+        return;
+      }
+      if (held) {
+        keys.add(key);
+      } else {
+        keys.delete(key);
+      }
+      realtimeStore.sendInput(vectorOf(keys));
+    };
+
     const onKeyDown = (event: KeyboardEvent): void => {
-      pressed.add(event.key.toLowerCase());
+      onKeyChange(event, true);
     };
     const onKeyUp = (event: KeyboardEvent): void => {
-      pressed.delete(event.key.toLowerCase());
+      onKeyChange(event, false);
     };
+    // A backgrounded tab never receives keyup, so a held key would otherwise
+    // run the avatar off the map until the socket drops.
+    const release = (): void => {
+      keys.clear();
+      realtimeStore.sendInput(vectorOf(keys));
+    };
+    const onVisibilityChange = (): void => {
+      if (document.hidden) {
+        release();
+      }
+    };
+
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
-
-    const interval = window.setInterval(() => {
-      realtimeStore.sendInput({
-        x: Number(pressed.has("d")) - Number(pressed.has("a")),
-        z: Number(pressed.has("s")) - Number(pressed.has("w")),
-      });
-    }, 50);
+    window.addEventListener("blur", release);
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
-      window.clearInterval(interval);
+      window.removeEventListener("blur", release);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      release();
     };
   }, []);
+
+  useEffect(() => {
+    // Input is sent on change, and a fresh socket starts with none, so whatever
+    // is held has to be re-announced when the connection comes back.
+    if (status === "live") {
+      realtimeStore.sendInput(vectorOf(pressed.current));
+    }
+  }, [status]);
 };
 
 const formatClientId = (clientId: ClientId | null): string =>
@@ -64,7 +106,7 @@ export const RuntimePage = () => {
     };
   }, []);
 
-  useMovementInput();
+  useMovementInput(meta.status);
 
   return (
     <main className="mx-auto max-w-[1600px] p-4 sm:p-6">
@@ -144,6 +186,22 @@ export const RuntimePage = () => {
               </dt>
               <dd className="mt-1 font-mono">
                 {meta.latencyMs === null ? "—" : `${meta.latencyMs} ms`}
+              </dd>
+            </div>
+            <div className="col-span-2">
+              <dt className="text-muted-foreground font-mono text-[0.65rem] tracking-wider">
+                LAST FAULT
+              </dt>
+              <dd
+                className={cn(
+                  "mt-1 font-mono text-xs wrap-anywhere",
+                  meta.lastError === null
+                    ? "text-muted-foreground"
+                    : "text-destructive"
+                )}
+                data-testid="last-fault"
+              >
+                {meta.lastError ?? "—"}
               </dd>
             </div>
           </dl>

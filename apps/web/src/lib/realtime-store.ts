@@ -4,7 +4,7 @@ import type { WorldSource } from "@agent-native/game-three";
 import { encodeClientMessage } from "@agent-native/protocol";
 import type { ServerMessage } from "@agent-native/protocol";
 
-type ConnectionStatus = "connecting" | "live" | "offline" | "error";
+export type ConnectionStatus = "connecting" | "live" | "offline" | "error";
 
 export interface RealtimeMeta {
   readonly clientId: ClientId | null;
@@ -31,6 +31,8 @@ export class RealtimeStore implements WorldSource {
   readonly #positions = new Map<string, { x: number; y: number; z: number }>();
   readonly #rosterListeners = new Set<() => void>();
   #meta = initialMeta;
+  /** Last vector actually put on the wire, so unchanged input is not resent. */
+  #lastInput: MovementInput = { x: 0, z: 0 };
   #roster: readonly string[] = [];
   #sequence = 0;
   #socket: WebSocket | null = null;
@@ -61,6 +63,9 @@ export class RealtimeStore implements WorldSource {
 
   attach(socket: WebSocket): void {
     this.#socket = socket;
+    // A fresh connection carries no input state on the server, so the dedupe
+    // cache has to reset with it or a held key would never be re-announced.
+    this.#lastInput = { x: 0, z: 0 };
     this.#updateMeta({ lastError: null, status: "live" });
     this.#send({
       roomId: LOBBY_ROOM_ID,
@@ -70,12 +75,33 @@ export class RealtimeStore implements WorldSource {
     });
   }
 
-  detach(message: string | null = null): void {
+  /**
+   * `socket` identifies the attempt being torn down. A superseded attempt must
+   * not clear a connection that a later one has already established, which is
+   * otherwise reachable whenever two attempts overlap - React StrictMode
+   * remounts the effect, so it happens on every dev boot.
+   */
+  detach(message: string | null = null, socket?: WebSocket): void {
+    if (
+      socket !== undefined &&
+      this.#socket !== null &&
+      this.#socket !== socket
+    ) {
+      return;
+    }
     this.#socket = null;
+    // While disconnected the world is unknown. Continuing to render the last
+    // snapshot shows entities that may already be gone.
+    this.#clearWorld();
     this.#updateMeta({
       lastError: message,
       status: message === null ? "offline" : "error",
     });
+  }
+
+  /** Surface a fault that did not close the socket, such as an undecodable frame. */
+  reportError(message: string): void {
+    this.#updateMeta({ lastError: message, status: "error" });
   }
 
   apply(message: ServerMessage): void {
@@ -110,6 +136,10 @@ export class RealtimeStore implements WorldSource {
   }
 
   sendInput(input: MovementInput): void {
+    if (input.x === this.#lastInput.x && input.z === this.#lastInput.z) {
+      return;
+    }
+    this.#lastInput = input;
     this.#send({
       input,
       roomId: LOBBY_ROOM_ID,
@@ -155,6 +185,17 @@ export class RealtimeStore implements WorldSource {
       for (const listener of this.#metaListeners) {
         listener();
       }
+    }
+  }
+
+  #clearWorld(): void {
+    this.#positions.clear();
+    if (this.#roster.length === 0) {
+      return;
+    }
+    this.#roster = [];
+    for (const listener of this.#rosterListeners) {
+      listener();
     }
   }
 
