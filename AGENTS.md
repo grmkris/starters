@@ -48,7 +48,7 @@ User instructions override repository skills. Skills inform implementation; they
 
 ## UI
 
-- Inspect `components.json`, then use the shadcn CLI for shared components.
+- Inspect the `components.json` for the workspace you are changing (`packages/ui/components.json` or `apps/web/components.json`; there is no root one), then use the shadcn CLI for shared components.
 - shadcn/Base UI owns DOM controls and overlays. R3F owns the scene. In-world UI is a later, separate capability.
 - Use semantic tokens from `packages/ui/src/styles/globals.css`. Keep accessible names, focus states, reduced-motion behavior, and responsive layouts.
 - A visible change is incomplete until the app boots, browser errors are checked, and the changed interaction is exercised.

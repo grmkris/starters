@@ -1,6 +1,6 @@
 # Research assessment
 
-Reviewed on 2026-09-04 from `research.md`, the original multi-agent brain dump. The source mixes durable architecture, speculative ecosystem claims, repeated recommendations, install recipes, and mutually exclusive implementation choices. It remains archival input; this document is the maintained decision record.
+Reviewed on 2026-09-04 from `docs/research/original-research.md`, the original multi-agent brain dump. The source mixes durable architecture, speculative ecosystem claims, repeated recommendations, install recipes, and mutually exclusive implementation choices. It remains archival input; this document is the maintained decision record.
 
 ## Executive conclusion
 

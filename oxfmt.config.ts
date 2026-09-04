@@ -3,5 +3,8 @@ import ultracite from "ultracite/oxfmt";
 
 export default defineConfig({
   ...ultracite,
-  ignorePatterns: [...(ultracite.ignorePatterns ?? []), "research.md"],
+  ignorePatterns: [
+    ...(ultracite.ignorePatterns ?? []),
+    "docs/research/original-research.md",
+  ],
 });

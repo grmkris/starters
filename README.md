@@ -37,4 +37,4 @@ bun run e2e
 - `.agents/skills` — five narrow, repository-specific decision guides.
 - `e2e` — Chromium smoke coverage for runtime, routes, console errors, and compact layout.
 
-Read `docs/research-assessment.md` for the deep analysis of the original research and `docs/architecture.md` for the maintained package contract.
+Read `docs/research/assessment.md` for the deep analysis of the original research and `docs/architecture.md` for the maintained package contract.
