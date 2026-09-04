@@ -16,6 +16,9 @@ packages/contracts/cache/
 packages/contracts/out/
 packages/contracts/broadcast/
 
+# Recorded realtime ledgers
+.ledger/
+
 # Local tools
 .DS_Store
 *.log

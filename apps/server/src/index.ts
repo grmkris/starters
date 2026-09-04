@@ -1,15 +1,18 @@
 import { ClientId, LOBBY_ROOM_ID } from "@agent-native/domain";
 import type { RoomId } from "@agent-native/domain";
 import { createSimulation } from "@agent-native/game-core";
+import type { PlayerState } from "@agent-native/game-core";
 import {
   decodeClientMessage,
   encodeServerMessage,
 } from "@agent-native/protocol";
 import type { ServerMessage } from "@agent-native/protocol";
 import { BunRuntime } from "@effect/platform-bun";
-import { Config, Context, Effect, Layer, Result } from "effect";
+import { Config, Context, Effect, Layer, Option, Result } from "effect";
 
 import { createInputBuffer } from "./input-buffer";
+import { createLedger, LEDGER_FORMAT } from "./ledger";
+import type { Ledger } from "./ledger";
 import { createTickPacer } from "./tick-pacer";
 
 const TICK_RATE = 20;
@@ -25,6 +28,7 @@ type RealtimeSocket = Bun.ServerWebSocket<SocketData>;
 
 interface ServerResource {
   readonly interval: ReturnType<typeof setInterval>;
+  readonly ledger: Ledger | null;
   readonly server: Bun.Server<SocketData>;
 }
 
@@ -37,7 +41,22 @@ const send = (socket: RealtimeSocket, message: ServerMessage): void => {
   socket.send(encodeServerMessage(message));
 };
 
-const createRealtimeServer = (port: number): ServerResource => {
+const createRealtimeServer = (
+  port: number,
+  ledgerDirectory: string | null
+): ServerResource => {
+  const startedAt = Date.now();
+  const ledger =
+    ledgerDirectory === null ? null : createLedger(ledgerDirectory, startedAt);
+
+  ledger?.record({
+    format: LEDGER_FORMAT,
+    protocol: 1,
+    startedAt,
+    tickRate: TICK_RATE,
+    type: "ledger.header",
+  });
+
   const simulation = createSimulation<ClientId>();
   const inputs = createInputBuffer<ClientId>();
   const sockets = new Map<ClientId, RealtimeSocket>();
@@ -107,6 +126,10 @@ const createRealtimeServer = (port: number): ServerResource => {
       close(socket) {
         sockets.delete(socket.data.clientId);
         simulation.removePlayer(socket.data.clientId);
+        ledger?.record({
+          clientId: socket.data.clientId,
+          type: "session.closed",
+        });
         broadcastPresence();
       },
       message(socket, rawMessage) {
@@ -150,6 +173,10 @@ const createRealtimeServer = (port: number): ServerResource => {
       open(socket) {
         sockets.set(socket.data.clientId, socket);
         simulation.spawnPlayer(socket.data.clientId);
+        ledger?.record({
+          clientId: socket.data.clientId,
+          type: "session.opened",
+        });
         sequence += 1;
         send(socket, {
           v: 1,
@@ -177,6 +204,7 @@ const createRealtimeServer = (port: number): ServerResource => {
     }
 
     const frame = inputs.drain();
+    let players: readonly PlayerState<ClientId>[] = [];
 
     for (let step = 0; step < owed; step += 1) {
       // Intent applies at the first boundary of a catch-up run. The Movement
@@ -191,6 +219,14 @@ const createRealtimeServer = (port: number): ServerResource => {
 
       simulation.step(FIXED_DELTA_SECONDS);
       tick += 1;
+      players = simulation.snapshot();
+
+      ledger?.record({
+        inputs: step === 0 ? frame : [],
+        players,
+        tick,
+        type: "tick",
+      });
     }
 
     // Snapshots carry whole state rather than deltas, so a catch-up run
@@ -198,7 +234,7 @@ const createRealtimeServer = (port: number): ServerResource => {
     // would only have clients overwrite each with the next in the same task.
     sequence += 1;
     broadcast({
-      players: simulation.snapshot(),
+      players,
       roomId: LOBBY_ROOM_ID,
       seq: sequence,
       tick,
@@ -207,7 +243,7 @@ const createRealtimeServer = (port: number): ServerResource => {
     });
   }, TICK_MS);
 
-  return { interval, server };
+  return { interval, ledger, server };
 };
 
 class RealtimeServer extends Context.Service<
@@ -218,12 +254,21 @@ class RealtimeServer extends Context.Service<
     RealtimeServer,
     Effect.gen(function* layer() {
       const port = yield* Config.number("PORT").pipe(Config.withDefault(3001));
+      // Recording is off unless asked for. A reference implementation should be
+      // able to show its own determinism on demand without every `bun dev` in
+      // every clone leaving ndjson behind.
+      const ledgerDirectory = yield* Config.string("LEDGER_DIR").pipe(
+        Config.option
+      );
       const resource = yield* Effect.acquireRelease(
-        Effect.sync(() => createRealtimeServer(port)),
-        ({ interval, server }) =>
+        Effect.sync(() =>
+          createRealtimeServer(port, Option.getOrNull(ledgerDirectory))
+        ),
+        ({ interval, ledger, server }) =>
           Effect.promise(async () => {
             clearInterval(interval);
             await server.stop(true);
+            await ledger?.close();
           })
       );
       const url = `http://localhost:${resource.server.port}`;
