@@ -10,41 +10,32 @@ export default defineConfig({
   rules: {
     "eslint/sort-keys": "off",
     "eslint/default-case": "off",
+    // Effect Schema's contract idiom declares a value and its type under one
+    // name (`const X = Schema...; export type X = typeof X.Type`). That is a
+    // deliberate repository-wide pattern, not a local inconvenience, and `tsc`
+    // still reports a genuine value/value redeclaration as TS2451.
+    "eslint/no-redeclare": "off",
+    // With `Schema.TaggedError` and `Context.Service`, `class` is a declaration
+    // keyword rather than an OOP design choice, so a per-file limit of 1 is the
+    // wrong shape here. 3 keeps a real ceiling.
+    "eslint/max-classes-per-file": ["error", 3],
+    // False positive against Effect's tagged-error idiom: the rule reads
+    // `class E extends Schema.TaggedError<E>()(...)` as a bare `Error` call and
+    // demands `new`, where `new` would be a syntax error. It fires on every
+    // tagged error in the repository, so this is a systematic mismatch rather
+    // than a local exception.
+    "unicorn/throw-new-error": "off",
   },
   overrides: [
     {
+      // Vendored shadcn CLI output. The generator owns this file's style and
+      // will reimpose it on the next `shadcn add`, so matching repository style
+      // here would be undone rather than preserved.
       files: ["packages/ui/src/components/**/*.{ts,tsx}"],
       rules: {
         "eslint/func-style": "off",
         "import/consistent-type-specifier-style": "off",
         "react/function-component-definition": "off",
-      },
-    },
-    {
-      files: [
-        "packages/domain/src/**/*.ts",
-        "packages/protocol/src/**/*.ts",
-        "packages/chain/src/**/*.ts",
-      ],
-      rules: {
-        "eslint/no-redeclare": "off",
-      },
-    },
-    {
-      files: [
-        "packages/domain/src/**/*.ts",
-        "packages/chain/src/**/*.ts",
-        "packages/database/src/**/*.ts",
-        "apps/web/src/lib/realtime-client.ts",
-      ],
-      rules: {
-        "unicorn/throw-new-error": "off",
-      },
-    },
-    {
-      files: ["packages/chain/src/index.ts", "packages/database/src/index.ts"],
-      rules: {
-        "eslint/max-classes-per-file": "off",
       },
     },
   ],
