@@ -53,3 +53,19 @@ describe("authoritative simulation", () => {
     expect(simulation.snapshot()).toEqual([]);
   });
 });
+
+describe("simulation lifetime", () => {
+  test("returns its world so a host can outlive sixteen of them", () => {
+    // Koota allocates world ids from a pool of sixteen and reclaims one only on
+    // destroy. Without dispose this throws "Too many worlds created" on the
+    // seventeenth iteration, so the count is the assertion.
+    expect(() => {
+      for (let created = 0; created < 24; created += 1) {
+        const simulation = createSimulation();
+        simulation.spawnPlayer(`player-${created}`);
+        simulation.step(1 / 20);
+        simulation.dispose();
+      }
+    }).not.toThrow();
+  });
+});

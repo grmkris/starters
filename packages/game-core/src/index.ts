@@ -32,6 +32,12 @@ export interface Simulation<Id extends string = string> {
   ) => void;
   readonly step: (deltaSeconds: number) => void;
   readonly snapshot: () => readonly PlayerState<Id>[];
+  /**
+   * Releases the underlying world. Koota allocates world ids from a fixed pool
+   * of sixteen and reclaims one only on destroy, so a host that creates a
+   * simulation per room and never disposes runs out at the seventeenth.
+   */
+  readonly dispose: () => void;
 }
 
 export const createSimulation = <
@@ -108,5 +114,18 @@ export const createSimulation = <
     );
   };
 
-  return { applyInput, removePlayer, snapshot, spawnPlayer, step, world };
+  const dispose = (): void => {
+    players.clear();
+    world.destroy();
+  };
+
+  return {
+    applyInput,
+    dispose,
+    removePlayer,
+    snapshot,
+    spawnPlayer,
+    step,
+    world,
+  };
 };
