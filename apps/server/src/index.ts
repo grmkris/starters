@@ -26,10 +26,12 @@ interface SocketData {
 
 type RealtimeSocket = Bun.ServerWebSocket<SocketData>;
 
-interface ServerResource {
+export interface ServerResource {
   readonly interval: ReturnType<typeof setInterval>;
   readonly ledger: Ledger | null;
   readonly server: Bun.Server<SocketData>;
+  /** Releases every resource the server holds, including the ECS world. */
+  readonly dispose: () => Promise<void>;
 }
 
 const responseHeaders = {
@@ -41,7 +43,12 @@ const send = (socket: RealtimeSocket, message: ServerMessage): void => {
   socket.send(encodeServerMessage(message));
 };
 
-const createRealtimeServer = (
+/**
+ * Builds a running server. Exported so a test can drive the real thing on an
+ * ephemeral port: pass `port: 0` and read the assigned port back from
+ * `resource.server.port`.
+ */
+export const createRealtimeServer = (
   port: number,
   ledgerDirectory: string | null
 ): ServerResource => {
@@ -243,7 +250,18 @@ const createRealtimeServer = (
     });
   }, TICK_MS);
 
-  return { interval, ledger, server };
+  const dispose = async (): Promise<void> => {
+    clearInterval(interval);
+    await server.stop(true);
+    await ledger?.close();
+    // Koota allocates world ids from a fixed pool of 16 and only returns one on
+    // destroy, so a process that builds worlds without releasing them stops
+    // being able to build them at all. Harmless while a process held exactly
+    // one world for its lifetime; not harmless once a room owns a world.
+    simulation.world.destroy();
+  };
+
+  return { dispose, interval, ledger, server };
 };
 
 class RealtimeServer extends Context.Service<
@@ -264,11 +282,9 @@ class RealtimeServer extends Context.Service<
         Effect.sync(() =>
           createRealtimeServer(port, Option.getOrNull(ledgerDirectory))
         ),
-        ({ interval, ledger, server }) =>
+        (running) =>
           Effect.promise(async () => {
-            clearInterval(interval);
-            await server.stop(true);
-            await ledger?.close();
+            await running.dispose();
           })
       );
       const url = `http://localhost:${resource.server.port}`;
@@ -278,4 +294,8 @@ class RealtimeServer extends Context.Service<
   );
 }
 
-BunRuntime.runMain(Layer.launch(RealtimeServer.layer));
+// Guarded so importing this module does not start listening. `replay.ts` uses
+// the same shape for the same reason.
+if (import.meta.main) {
+  BunRuntime.runMain(Layer.launch(RealtimeServer.layer));
+}
