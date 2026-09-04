@@ -13,6 +13,7 @@ import { Effect, Fiber } from "effect";
 import { ActivityIcon, RadioTowerIcon, SendIcon } from "lucide-react";
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 
+import { Thumbstick } from "../components/thumbstick";
 import { useMovementInput } from "../hooks/use-movement-input";
 import { realtimeProgram } from "../lib/realtime-client";
 import { realtimeStore } from "../lib/realtime-store";
@@ -78,7 +79,15 @@ export const RuntimePage = () => {
             </div>
           </div>
           <div className="text-muted-foreground pointer-events-none absolute bottom-4 left-4 font-mono text-[0.65rem] tracking-[0.18em]">
-            WASD TO TRANSMIT INPUT · DRAG TO ORBIT
+            <span className="pointer-coarse:hidden">
+              WASD TO TRANSMIT INPUT · DRAG TO ORBIT
+            </span>
+            <span className="hidden pointer-coarse:inline">
+              STICK TO TRANSMIT INPUT · DRAG TO ORBIT
+            </span>
+          </div>
+          <div className="pointer-events-none absolute right-4 bottom-4">
+            <Thumbstick />
           </div>
         </section>
 
