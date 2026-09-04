@@ -1,5 +1,16 @@
 import { Schema } from "effect";
 
+import { ClientId } from "./id";
+
+export {
+  ClientId,
+  LOBBY_ROOM_ID,
+  makeIdSchema,
+  parseTypeId,
+  RoomId,
+} from "./id";
+export type { IdSchema, TypeId, TypeIdParts } from "./id";
+
 export const PROTOCOL_VERSION = 1 as const;
 
 export const ProtocolVersion = Schema.Literals([PROTOCOL_VERSION]);
@@ -20,7 +31,7 @@ export const MovementInput = Schema.Struct({
 export type MovementInput = typeof MovementInput.Type;
 
 export const PlayerSnapshot = Schema.Struct({
-  clientId: Schema.String,
+  clientId: ClientId,
   position: Vector3,
 });
 
