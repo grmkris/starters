@@ -1,6 +1,8 @@
 import { decodeServerMessage } from "@agent-native/protocol";
 import { Effect, Result, Schedule, Schema } from "effect";
+import { Machine } from "effect-machine";
 
+import { connectionMachine, ConnectionEvent } from "./connection-machine";
 import type { RealtimeStore } from "./realtime-store";
 
 class RealtimeConnectionError extends Schema.TaggedError<RealtimeConnectionError>()(
@@ -8,106 +10,114 @@ class RealtimeConnectionError extends Schema.TaggedError<RealtimeConnectionError
   { message: Schema.String }
 ) {}
 
-/**
- * A connection that stayed up this long counts as a session rather than a
- * failed attempt. Without a threshold, a server that accepts and immediately
- * drops would look like repeated success and reconnect with no delay at all.
- */
-const STABLE_SESSION_MS = 2000;
-
 /** Success value of one attempt: the socket was up and then closed cleanly. */
 type SessionEnded = "session-ended";
 
+interface OpenSocket {
+  readonly listeners: AbortController;
+  readonly socket: WebSocket;
+}
+
 const connectAttempt = Effect.fn("connectAttempt")(
   (store: RealtimeStore, url: string) =>
-    Effect.callback<SessionEnded, RealtimeConnectionError>((resume) => {
-      store.setConnecting();
-      const socket = new WebSocket(url);
-      const listeners = new AbortController();
-      let settled = false;
-      let openedAt: number | null = null;
+    Effect.scoped(
+      Machine.scoped(
+        Effect.gen(function* attempt() {
+          const actor = yield* Machine.spawn(connectionMachine);
+          yield* actor.start;
+          // The DOM listeners below are not Effects, so they drive the machine
+          // through its synchronous client rather than forking a fiber each.
+          const machine = actor.client;
 
-      // `Effect.callback`'s returned finalizer only runs on interruption, so
-      // every path that resumes has to release the socket itself or each failed
-      // attempt leaks one socket and its listeners.
-      const teardown = (): void => {
-        listeners.abort();
-        if (socket.readyState < WebSocket.CLOSING) {
-          socket.close(1000, "client shutdown");
-        }
-      };
+          // `Effect.acquireRelease` releases on every exit - success, failure,
+          // and interruption alike. The previous shape used
+          // `Effect.callback`, whose finalizer runs only on interruption, so
+          // the error path had to remember to close the socket itself and a
+          // missed path leaked one socket and four listeners per attempt.
+          yield* Effect.acquireRelease(
+            Effect.sync((): OpenSocket => {
+              store.setConnecting();
+              const socket = new WebSocket(url);
+              const listeners = new AbortController();
+              const options = { signal: listeners.signal };
 
-      const settle = (
-        outcome: Effect.Effect<SessionEnded, RealtimeConnectionError>
-      ): void => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        teardown();
-        resume(outcome);
-      };
+              socket.addEventListener(
+                "open",
+                () => {
+                  machine.send(ConnectionEvent.Opened({ at: Date.now() }));
+                  store.attach(socket);
+                },
+                options
+              );
 
-      const fail = (message: string): void => {
-        store.detach(message, socket);
-        settle(Effect.fail(new RealtimeConnectionError({ message })));
-      };
+              socket.addEventListener(
+                "message",
+                (event) => {
+                  const decoded = decodeServerMessage(event.data);
+                  if (Result.isSuccess(decoded)) {
+                    store.apply(decoded.success);
+                    return;
+                  }
+                  store.reportError(
+                    `Undecodable server message: ${decoded.failure.message}`
+                  );
+                },
+                options
+              );
 
-      const options = { signal: listeners.signal };
+              socket.addEventListener(
+                "error",
+                () => {
+                  machine.send(
+                    ConnectionEvent.TransportError({
+                      message: "Realtime transport unavailable",
+                    })
+                  );
+                },
+                options
+              );
 
-      socket.addEventListener(
-        "open",
-        () => {
-          openedAt = Date.now();
-          store.attach(socket);
-        },
-        options
-      );
+              socket.addEventListener(
+                "close",
+                () => {
+                  machine.send(
+                    ConnectionEvent.SocketClosed({ at: Date.now() })
+                  );
+                },
+                options
+              );
 
-      socket.addEventListener(
-        "message",
-        (event) => {
-          const decoded = decodeServerMessage(event.data);
-          if (Result.isSuccess(decoded)) {
-            store.apply(decoded.success);
-            return;
-          }
-          store.reportError(
-            `Undecodable server message: ${decoded.failure.message}`
+              return { listeners, socket };
+            }),
+            ({ listeners, socket }) =>
+              Effect.sync(() => {
+                // Detaching here rather than per-outcome keeps one exit path,
+                // and passing the socket means a superseded attempt cannot
+                // clear a connection a later one already established.
+                const state = machine.getSnapshot();
+                store.detach(
+                  state._tag === "Failed" ? state.message : null,
+                  socket
+                );
+                listeners.abort();
+                if (socket.readyState < WebSocket.CLOSING) {
+                  socket.close(1000, "client shutdown");
+                }
+              })
           );
-        },
-        options
-      );
 
-      socket.addEventListener(
-        "error",
-        () => {
-          fail("Realtime transport unavailable");
-        },
-        options
-      );
+          const outcome = yield* actor.awaitOutput;
 
-      socket.addEventListener(
-        "close",
-        () => {
-          if (openedAt !== null && Date.now() - openedAt >= STABLE_SESSION_MS) {
-            // Ending a real session succeeds, so the retry schedule below is
-            // rebuilt from scratch on the next attempt instead of escalating.
-            store.detach(null, socket);
-            settle(Effect.succeed("session-ended"));
-            return;
+          if (outcome._tag === "Failed") {
+            return yield* Effect.fail(
+              new RealtimeConnectionError({ message: outcome.message })
+            );
           }
-          fail("Realtime transport closed");
-        },
-        options
-      );
 
-      return Effect.sync(() => {
-        settled = true;
-        store.detach(null, socket);
-        teardown();
-      });
-    })
+          return "session-ended" satisfies SessionEnded;
+        })
+      )
+    )
 );
 
 /**
