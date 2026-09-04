@@ -31,6 +31,38 @@ export const PlayerSnapshot = Schema.Struct({
 
 export type PlayerSnapshot = typeof PlayerSnapshot.Type;
 
+/**
+ * Authorises reuse of a `ClientId` across a reconnect.
+ *
+ * Deliberately not a TypeID. TypeIDs are UUIDv7, so they are time-ordered and
+ * partially predictable - correct for an identifier, wrong for a bearer secret,
+ * because possession of one is the whole claim. This is random.
+ *
+ * It grants identity only: the server respawns the entity, so holding a stolen
+ * token gets you somebody's name and colour, never their position or progress.
+ * Nothing here is a substitute for authentication; see docs/decisions/.
+ */
+export const ResumeToken = Schema.String.pipe(
+  Schema.check(
+    Schema.isPattern(/^[0-9a-f]{32}$/u, {
+      message: "Expected a 32-character lowercase hexadecimal resume token",
+    })
+  ),
+  Schema.brand("ResumeToken")
+);
+
+export type ResumeToken = typeof ResumeToken.Type;
+
+const decodeResumeToken = Schema.decodeUnknownSync(ResumeToken);
+
+/** The only place a resume token is minted. 128 bits from the CSPRNG. */
+export const makeResumeToken = (): ResumeToken => {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return decodeResumeToken(
+    Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")
+  );
+};
+
 export class InvalidProtocolMessage extends Schema.TaggedError<InvalidProtocolMessage>()(
   "InvalidProtocolMessage",
   {
