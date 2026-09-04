@@ -2,6 +2,7 @@ import { Config, Context, Effect, Layer, Redacted, Schema } from "effect";
 import postgres from "postgres";
 import type { Sql } from "postgres";
 
+export { typeIdColumn, typeIdPrimaryKey } from "./columns";
 export { rooms } from "./schema";
 
 export class DatabaseError extends Schema.TaggedError<DatabaseError>()(

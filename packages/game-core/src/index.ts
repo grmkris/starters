@@ -7,8 +7,14 @@ export const Player = trait({ clientId: "" });
 export const Position = trait({ x: 0, y: 0.5, z: 0 });
 export const Movement = trait({ x: 0, z: 0 });
 
-export interface PlayerState {
-  readonly clientId: string;
+/**
+ * `Id` lets a host narrow the client identifier to its own branded type
+ * (`ClientId` in this repository) without this package importing the domain,
+ * which the boundary check forbids. It defaults to `string` so the simulation
+ * stays usable on its own in tests and replay tools.
+ */
+export interface PlayerState<Id extends string = string> {
+  readonly clientId: Id;
   readonly position: {
     readonly x: number;
     readonly y: number;
@@ -16,23 +22,25 @@ export interface PlayerState {
   };
 }
 
-export interface Simulation {
+export interface Simulation<Id extends string = string> {
   readonly world: World;
-  readonly spawnPlayer: (clientId: string) => void;
-  readonly removePlayer: (clientId: string) => void;
+  readonly spawnPlayer: (clientId: Id) => void;
+  readonly removePlayer: (clientId: Id) => void;
   readonly applyInput: (
-    clientId: string,
+    clientId: Id,
     input: { readonly x: number; readonly z: number }
   ) => void;
   readonly step: (deltaSeconds: number) => void;
-  readonly snapshot: () => readonly PlayerState[];
+  readonly snapshot: () => readonly PlayerState<Id>[];
 }
 
-export const createSimulation = (): Simulation => {
+export const createSimulation = <
+  Id extends string = string,
+>(): Simulation<Id> => {
   const world = createWorld();
-  const players = new Map<string, Entity>();
+  const players = new Map<Id, Entity>();
 
-  const spawnPlayer = (clientId: string): void => {
+  const spawnPlayer = (clientId: Id): void => {
     if (players.has(clientId)) {
       return;
     }
@@ -46,7 +54,7 @@ export const createSimulation = (): Simulation => {
     players.set(clientId, entity);
   };
 
-  const removePlayer = (clientId: string): void => {
+  const removePlayer = (clientId: Id): void => {
     const entity = players.get(clientId);
     if (!entity) {
       return;
@@ -57,7 +65,7 @@ export const createSimulation = (): Simulation => {
   };
 
   const applyInput = (
-    clientId: string,
+    clientId: Id,
     input: { readonly x: number; readonly z: number }
   ): void => {
     const entity = players.get(clientId);
@@ -74,14 +82,21 @@ export const createSimulation = (): Simulation => {
     });
   };
 
-  const snapshot = (): readonly PlayerState[] => {
-    const state: PlayerState[] = [];
-    world.query(Player, Position).readEach(([player, position]) => {
+  // Iterating the player map rather than querying the `Player` trait keeps the
+  // caller's identifier type: trait storage is declared as a plain string, so
+  // reading `clientId` back out of the world would lose the `Id` narrowing.
+  const snapshot = (): readonly PlayerState<Id>[] => {
+    const state: PlayerState<Id>[] = [];
+    for (const [clientId, entity] of players) {
+      const position = entity.get(Position);
+      if (!position) {
+        continue;
+      }
       state.push({
-        clientId: player.clientId,
+        clientId,
         position: { x: position.x, y: position.y, z: position.z },
       });
-    });
+    }
     return state;
   };
 

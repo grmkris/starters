@@ -1,5 +1,5 @@
-import { PROTOCOL_VERSION } from "@agent-native/domain";
-import type { MovementInput } from "@agent-native/domain";
+import { LOBBY_ROOM_ID, PROTOCOL_VERSION } from "@agent-native/domain";
+import type { ClientId, MovementInput } from "@agent-native/domain";
 import type { WorldSource } from "@agent-native/game-three";
 import { encodeClientMessage } from "@agent-native/protocol";
 import type { ServerMessage } from "@agent-native/protocol";
@@ -7,7 +7,7 @@ import type { ServerMessage } from "@agent-native/protocol";
 type ConnectionStatus = "connecting" | "live" | "offline" | "error";
 
 export interface RealtimeMeta {
-  readonly clientId: string | null;
+  readonly clientId: ClientId | null;
   readonly connected: number;
   readonly latencyMs: number | null;
   readonly lastError: string | null;
@@ -63,7 +63,7 @@ export class RealtimeStore implements WorldSource {
     this.#socket = socket;
     this.#updateMeta({ lastError: null, status: "live" });
     this.#send({
-      roomId: "lobby",
+      roomId: LOBBY_ROOM_ID,
       seq: this.#nextSequence(),
       type: "room.join",
       v: PROTOCOL_VERSION,
@@ -112,7 +112,7 @@ export class RealtimeStore implements WorldSource {
   sendInput(input: MovementInput): void {
     this.#send({
       input,
-      roomId: "lobby",
+      roomId: LOBBY_ROOM_ID,
       seq: this.#nextSequence(),
       type: "player.input",
       v: PROTOCOL_VERSION,

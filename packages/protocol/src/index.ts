@@ -1,7 +1,9 @@
 import {
+  ClientId,
   MovementInput,
   PlayerSnapshot,
   ProtocolVersion,
+  RoomId,
 } from "@agent-native/domain";
 import { Schema } from "effect";
 
@@ -13,13 +15,13 @@ const Envelope = {
 const ClientMessage = Schema.Union([
   Schema.Struct({
     ...Envelope,
-    roomId: Schema.String,
+    roomId: RoomId,
     type: Schema.Literals(["room.join"]),
   }),
   Schema.Struct({
     ...Envelope,
     input: MovementInput,
-    roomId: Schema.String,
+    roomId: RoomId,
     type: Schema.Literals(["player.input"]),
   }),
   Schema.Struct({
@@ -32,21 +34,21 @@ const ClientMessage = Schema.Union([
 const ServerMessage = Schema.Union([
   Schema.Struct({
     ...Envelope,
-    clientId: Schema.String,
-    roomId: Schema.String,
+    clientId: ClientId,
+    roomId: RoomId,
     tickRate: Schema.Int,
     type: Schema.Literals(["session.welcome"]),
   }),
   Schema.Struct({
     ...Envelope,
     connected: Schema.Int,
-    roomId: Schema.String,
+    roomId: RoomId,
     type: Schema.Literals(["room.presence"]),
   }),
   Schema.Struct({
     ...Envelope,
     players: Schema.Array(PlayerSnapshot),
-    roomId: Schema.String,
+    roomId: RoomId,
     tick: Schema.Int,
     type: Schema.Literals(["world.snapshot"]),
   }),

@@ -1,3 +1,5 @@
+import { ClientId, LOBBY_ROOM_ID } from "@agent-native/domain";
+import type { RoomId } from "@agent-native/domain";
 import { createSimulation } from "@agent-native/game-core";
 import {
   decodeClientMessage,
@@ -9,11 +11,10 @@ import { Config, Context, Effect, Layer, Result } from "effect";
 
 const TICK_RATE = 20;
 const FIXED_DELTA_SECONDS = 1 / TICK_RATE;
-const DEFAULT_ROOM = "lobby";
 
 interface SocketData {
-  clientId: string;
-  roomId: string;
+  clientId: ClientId;
+  roomId: RoomId;
 }
 
 type RealtimeSocket = Bun.ServerWebSocket<SocketData>;
@@ -33,8 +34,8 @@ const send = (socket: RealtimeSocket, message: ServerMessage): void => {
 };
 
 const createRealtimeServer = (port: number): ServerResource => {
-  const simulation = createSimulation();
-  const sockets = new Map<string, RealtimeSocket>();
+  const simulation = createSimulation<ClientId>();
+  const sockets = new Map<ClientId, RealtimeSocket>();
   let sequence = 0;
   let tick = 0;
 
@@ -49,7 +50,7 @@ const createRealtimeServer = (port: number): ServerResource => {
     sequence += 1;
     broadcast({
       connected: sockets.size,
-      roomId: DEFAULT_ROOM,
+      roomId: LOBBY_ROOM_ID,
       seq: sequence,
       type: "room.presence",
       v: 1,
@@ -75,8 +76,8 @@ const createRealtimeServer = (port: number): ServerResource => {
       if (url.pathname === "/realtime") {
         const upgraded = bunServer.upgrade(request, {
           data: {
-            clientId: crypto.randomUUID(),
-            roomId: DEFAULT_ROOM,
+            clientId: ClientId.generate(),
+            roomId: LOBBY_ROOM_ID,
           },
         });
         return upgraded
@@ -164,7 +165,7 @@ const createRealtimeServer = (port: number): ServerResource => {
     sequence += 1;
     broadcast({
       players: simulation.snapshot(),
-      roomId: DEFAULT_ROOM,
+      roomId: LOBBY_ROOM_ID,
       seq: sequence,
       tick,
       type: "world.snapshot",

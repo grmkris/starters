@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@agent-native/domain": "workspace:*",
     "@agent-native/game-core": "workspace:*",
     "@agent-native/protocol": "workspace:*",
     "@effect/platform-bun": "4.0.0-rc.112",

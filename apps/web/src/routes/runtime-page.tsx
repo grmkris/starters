@@ -1,3 +1,4 @@
+import type { ClientId } from "@agent-native/domain";
 import { WorldCanvas } from "@agent-native/game-three";
 import { Badge } from "@agent-native/ui/components/badge";
 import { Button } from "@agent-native/ui/components/button";
@@ -45,7 +46,7 @@ const useMovementInput = (): void => {
   }, []);
 };
 
-const formatClientId = (clientId: string | null): string =>
+const formatClientId = (clientId: ClientId | null): string =>
   clientId === null ? "awaiting" : clientId.slice(0, 8);
 
 export const RuntimePage = () => {
