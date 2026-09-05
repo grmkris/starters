@@ -31,7 +31,7 @@ const rejoin = async (
   resume: { readonly clientId: ClientId; readonly resumeToken: ResumeToken }
 ): Promise<{ readonly client: TestClient; readonly clientId: ClientId }> => {
   const client = await harness.connect();
-  const welcome = await client.next("session.welcome");
+  await client.next("session.welcome");
   client.send({
     resume,
     roomId: LOBBY_ROOM_ID,
@@ -40,14 +40,8 @@ const rejoin = async (
     v: PROTOCOL_VERSION,
   });
   const joined = await client.next("room.joined");
-  const snapshot = await client.until(
-    "world.snapshot",
-    (message) => message.players.length > 0
-  );
   expect(joined.roomId).toBe(LOBBY_ROOM_ID);
-  // The id the world actually knows it by, not merely the one it announced.
-  const [player] = snapshot.players;
-  return { client, clientId: player?.clientId ?? welcome.clientId };
+  return { client, clientId: joined.clientId };
 };
 
 let harness: Harness;

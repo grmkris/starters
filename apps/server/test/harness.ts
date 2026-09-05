@@ -225,10 +225,10 @@ export const startHarness = (
         type: "room.join",
         v: PROTOCOL_VERSION,
       });
-      await client.next("room.joined");
+      const joined = await client.next("room.joined");
       return {
         client,
-        clientId: welcome.clientId,
+        clientId: joined.clientId,
         resumeToken: welcome.resumeToken,
       };
     },

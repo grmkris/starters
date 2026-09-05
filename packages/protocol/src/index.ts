@@ -72,6 +72,10 @@ const ServerMessage = Schema.Union([
   Schema.Struct({
     ...Envelope,
     capacity: Schema.Int,
+    // The identity the world knows this connection by. It differs from the
+    // one `session.welcome` announced when a resume claim was honoured, and
+    // a client that kept the welcome id would render its own entity as remote.
+    clientId: ClientId,
     connected: Schema.Int,
     roomId: RoomId,
     type: Schema.Literals(["room.joined"]),

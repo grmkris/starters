@@ -197,6 +197,7 @@ export const createRealtimeServer = (
 
             send(socket, {
               capacity: outcome.room.capacity,
+              clientId: socket.data.clientId,
               connected: outcome.room.sockets.size,
               roomId: outcome.room.id,
               type: "room.joined",

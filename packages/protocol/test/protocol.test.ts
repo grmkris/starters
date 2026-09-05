@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   ClientId,
   LOBBY_ROOM_ID,
+  makeResumeToken,
   PROTOCOL_VERSION,
 } from "@agent-native/domain";
 import { Result } from "effect";
@@ -34,6 +35,41 @@ describe("wire protocol", () => {
         v: PROTOCOL_VERSION,
       });
     }
+  });
+
+  test("round-trips a join that carries a resume claim", () => {
+    const resume = { clientId, resumeToken: makeResumeToken() };
+    const decoded = decodeClientMessage(
+      encodeClientMessage({
+        resume,
+        roomId: LOBBY_ROOM_ID,
+        seq: 1,
+        type: "room.join",
+        v: PROTOCOL_VERSION,
+      })
+    );
+
+    expect(Result.isSuccess(decoded)).toBe(true);
+    if (Result.isSuccess(decoded) && decoded.success.type === "room.join") {
+      expect(decoded.success.resume).toEqual(resume);
+    }
+  });
+
+  test("tells a joined client which identity the world uses for it", () => {
+    const encoded = encodeServerMessage({
+      capacity: 16,
+      clientId,
+      connected: 1,
+      roomId: LOBBY_ROOM_ID,
+      seq: 2,
+      type: "room.joined",
+      v: PROTOCOL_VERSION,
+    });
+
+    expect(JSON.parse(encoded)).toMatchObject({
+      clientId,
+      type: "room.joined",
+    });
   });
 
   test("rejects unknown protocol versions", () => {
