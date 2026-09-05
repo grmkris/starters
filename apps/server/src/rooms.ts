@@ -1,5 +1,10 @@
 import { PROTOCOL_VERSION } from "@agent-native/domain";
-import type { ClientId, MovementInput, RoomId } from "@agent-native/domain";
+import type {
+  ClientId,
+  MovementInput,
+  ResumeToken,
+  RoomId,
+} from "@agent-native/domain";
 import { createSimulation } from "@agent-native/game-core";
 import type { PlayerState, Simulation } from "@agent-native/game-core";
 import type { ServerMessage } from "@agent-native/protocol";
@@ -19,6 +24,8 @@ import type { Ledger } from "./ledger";
 
 export interface SocketData {
   clientId: ClientId;
+  /** Proves a later connection may reclaim `clientId`. Issued with it. */
+  readonly resumeToken: ResumeToken;
   /** Null until `room.join` succeeds. A roomless socket receives no world. */
   roomId: RoomId | null;
   /** Messages sent on this connection. Only `send` writes it. */

@@ -118,6 +118,14 @@ const ServerMessage = Schema.Union([
   }),
 ]);
 
+/**
+ * Close code sent to a connection whose identity a newer connection resumed.
+ * It sits in the range the WebSocket RFC leaves to applications. A client that
+ * receives it must not present the same claim again: two tabs that share one
+ * stored identity would otherwise close each other forever.
+ */
+export const SUPERSEDED_CLOSE_CODE = 4000;
+
 export type ClientMessage = typeof ClientMessage.Type;
 export type ServerMessage = typeof ServerMessage.Type;
 

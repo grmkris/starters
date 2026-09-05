@@ -7,7 +7,7 @@ import {
 import type { ClientMessage, ServerMessage } from "@agent-native/protocol";
 import { Result } from "effect";
 
-import { createRealtimeServer } from "../src/index";
+import { createRealtimeServer, RESUME_TTL_MS } from "../src/index";
 import type { ServerResource } from "../src/index";
 
 /**
@@ -49,6 +49,8 @@ export interface TestClient {
     timeoutMs?: number
   ) => Promise<OfType<Type>>;
   readonly close: () => Promise<void>;
+  /** Resolves with the close code once the socket closes, whoever closed it. */
+  readonly closed: Promise<number>;
 }
 
 interface JoinedClient {
@@ -96,6 +98,13 @@ const connectClient = async (url: string): Promise<TestClient> => {
   const cursors = new Map<ServerMessage["type"], number>();
 
   const socket = await openSocket(url);
+
+  // oxlint-disable-next-line promise/avoid-new -- bridging an EventTarget
+  const closed = new Promise<number>((resolve) => {
+    socket.addEventListener("close", (event) => {
+      resolve(event.code);
+    });
+  });
 
   socket.addEventListener("message", (event) => {
     const decoded = decodeServerMessage(event.data);
@@ -176,19 +185,15 @@ const connectClient = async (url: string): Promise<TestClient> => {
     if (socket.readyState === WebSocket.CLOSED) {
       return;
     }
-    // oxlint-disable-next-line promise/avoid-new -- bridging an EventTarget
-    await new Promise<void>((resolve) => {
-      socket.addEventListener("close", () => {
-        resolve();
-      });
-      // Awaited, because server.stop(true) force-closes sockets and would race
-      // an assertion about the close handler.
-      socket.close(1000, "test complete");
-    });
+    // Awaited, because server.stop(true) force-closes sockets and would race
+    // an assertion about the close handler.
+    socket.close(1000, "test complete");
+    await closed;
   };
 
   return {
     close,
+    closed,
     next: async (type, timeoutMs) => await until(type, () => true, timeoutMs),
     received,
     send: (message) => {
@@ -198,11 +203,23 @@ const connectClient = async (url: string): Promise<TestClient> => {
   };
 };
 
+export interface HarnessOptions {
+  /** Null, the default, records nothing. */
+  readonly ledgerDirectory?: string | null;
+  /** Overrides the resume window so a test can see it close without waiting a minute. */
+  readonly resumeTtlMs?: number;
+}
+
 /** Starts a server on an ephemeral port. Never reads the environment. */
-export const startHarness = (
-  ledgerDirectory: string | null = null
-): Harness => {
-  const resource = createRealtimeServer(0, ledgerDirectory);
+export const startHarness = ({
+  ledgerDirectory = null,
+  resumeTtlMs = RESUME_TTL_MS,
+}: HarnessOptions = {}): Harness => {
+  const resource = createRealtimeServer({
+    ledgerDirectory,
+    port: 0,
+    resumeTtlMs,
+  });
   const { port } = resource.server;
   if (port === undefined) {
     // Bun reports no port for a unix socket; this harness always binds TCP.

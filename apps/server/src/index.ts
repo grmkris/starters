@@ -1,16 +1,15 @@
 import { ClientId, makeResumeToken } from "@agent-native/domain";
-import type {
-  ClientId as ClientIdType,
-  ResumeToken,
-} from "@agent-native/domain";
+import type { ClientId as ClientIdType } from "@agent-native/domain";
 import {
   decodeClientMessage,
   encodeServerMessage,
+  SUPERSEDED_CLOSE_CODE,
 } from "@agent-native/protocol";
 import type { ServerMessageBody } from "@agent-native/protocol";
 import { BunRuntime } from "@effect/platform-bun";
 import { Config, Context, Effect, Layer, Option, Result } from "effect";
 
+import { createResumeRegistry } from "./resume";
 import { createRooms } from "./rooms";
 import type { RealtimeSocket, Room, SocketData } from "./rooms";
 import { createTickPacer } from "./tick-pacer";
@@ -22,7 +21,15 @@ const ROOM_CAPACITY = 16;
 /** Bounded by Koota's pool of 16 world ids; see rooms.ts. */
 const MAX_ROOMS = 12;
 /** How long a disconnected client may reclaim its identity. */
-const RESUME_TTL_MS = 60_000;
+export const RESUME_TTL_MS = 60_000;
+
+export interface ServerOptions {
+  /** `0` asks the host for an ephemeral port. */
+  readonly port: number;
+  readonly ledgerDirectory: string | null;
+  /** How long a disconnected client may reclaim its identity. */
+  readonly resumeTtlMs: number;
+}
 
 export interface ServerResource {
   readonly interval: ReturnType<typeof setInterval>;
@@ -54,10 +61,11 @@ const send = (socket: RealtimeSocket, body: ServerMessageBody): void => {
  * ephemeral port: pass `port: 0` and read the assigned port back from
  * `resource.server.port`.
  */
-export const createRealtimeServer = (
-  port: number,
-  ledgerDirectory: string | null
-): ServerResource => {
+export const createRealtimeServer = ({
+  ledgerDirectory,
+  port,
+  resumeTtlMs,
+}: ServerOptions): ServerResource => {
   const rooms = createRooms({
     capacity: ROOM_CAPACITY,
     ledgerDirectory,
@@ -65,34 +73,12 @@ export const createRealtimeServer = (
     tickRate: TICK_RATE,
   });
 
-  /**
-   * Identities a disconnected client may reclaim, and the secret that proves
-   * the claim. Entries expire so a token cannot be redeemed indefinitely and
-   * the map cannot grow without bound.
-   */
-  const resumable = new Map<
-    ClientIdType,
-    { readonly token: ResumeToken; readonly expiresAt: number }
-  >();
+  const claims = createResumeRegistry(resumeTtlMs);
+  /** The socket each identity currently belongs to. */
+  const owners = new Map<ClientIdType, RealtimeSocket>();
 
-  const rememberIdentity = (
-    socket: RealtimeSocket,
-    token: ResumeToken
-  ): void => {
-    resumable.set(socket.data.clientId, {
-      expiresAt: Date.now() + RESUME_TTL_MS,
-      token,
-    });
-  };
-
-  const reclaim = (clientId: ClientIdType, token: ResumeToken): boolean => {
-    const entry = resumable.get(clientId);
-    if (entry === undefined) {
-      return false;
-    }
-    resumable.delete(clientId);
-    return entry.token === token && entry.expiresAt > Date.now();
-  };
+  const owns = (socket: RealtimeSocket): boolean =>
+    owners.get(socket.data.clientId) === socket;
 
   const broadcast = (room: Room, body: ServerMessageBody): void => {
     for (const member of room.sockets) {
@@ -116,6 +102,29 @@ export const createRealtimeServer = (
     }
   };
 
+  /**
+   * Moves `clientId` onto `socket`. A socket still holding it is one whose
+   * drop the client noticed before the server did: it is put out of its room
+   * and closed with a code that says why, so that client does not present the
+   * same claim again. The entity respawns under the new socket, which is the
+   * policy resume has throughout - identity comes back, position does not.
+   */
+  const adopt = (socket: RealtimeSocket, clientId: ClientIdType): void => {
+    const stale = owners.get(clientId);
+    if (stale !== undefined && stale !== socket) {
+      departed(stale);
+      stale.close(SUPERSEDED_CLOSE_CODE, "identity resumed elsewhere");
+    }
+    // The welcome identity was never used and nothing may reclaim it.
+    claims.forget(socket.data.clientId);
+    owners.delete(socket.data.clientId);
+    socket.data.clientId = clientId;
+    owners.set(clientId, socket);
+    // The claim rolls over to this socket's token, so the client resumes next
+    // time with the identity it has and the token it was most recently given.
+    claims.remember(clientId, socket.data.resumeToken);
+  };
+
   const server = Bun.serve<SocketData>({
     fetch(request, bunServer) {
       const url = new URL(request.url);
@@ -133,7 +142,12 @@ export const createRealtimeServer = (
 
       if (url.pathname === "/realtime") {
         const upgraded = bunServer.upgrade(request, {
-          data: { clientId: ClientId.generate(), roomId: null, seq: 0 },
+          data: {
+            clientId: ClientId.generate(),
+            resumeToken: makeResumeToken(),
+            roomId: null,
+            seq: 0,
+          },
         });
         return upgraded
           ? undefined
@@ -155,6 +169,13 @@ export const createRealtimeServer = (
     port,
     websocket: {
       close(socket) {
+        // A superseded socket no longer owns its identity; the one that took
+        // it over is the one whose departure counts.
+        if (!owns(socket)) {
+          return;
+        }
+        owners.delete(socket.data.clientId);
+        claims.release(socket.data.clientId);
         departed(socket);
       },
       message(socket, rawMessage) {
@@ -176,10 +197,14 @@ export const createRealtimeServer = (
             // An identity is reclaimed before the join, so the entity spawns
             // under the id the client keeps rather than one it must adopt.
             if (
+              socket.data.roomId === null &&
               message.resume !== undefined &&
-              reclaim(message.resume.clientId, message.resume.resumeToken)
+              claims.reclaim(
+                message.resume.clientId,
+                message.resume.resumeToken
+              )
             ) {
-              socket.data.clientId = message.resume.clientId;
+              adopt(socket, message.resume.clientId);
             }
 
             const outcome = rooms.join(socket, message.roomId);
@@ -244,13 +269,13 @@ export const createRealtimeServer = (
         }
       },
       open(socket) {
-        const token = makeResumeToken();
-        rememberIdentity(socket, token);
+        owners.set(socket.data.clientId, socket);
+        claims.remember(socket.data.clientId, socket.data.resumeToken);
         // Identity only. Membership begins at `room.join`, so this names no
         // room: a connection is somewhere only once it has asked to be.
         send(socket, {
           clientId: socket.data.clientId,
-          resumeToken: token,
+          resumeToken: socket.data.resumeToken,
           tickRate: TICK_RATE,
           type: "session.welcome",
           v: 1,
@@ -289,6 +314,7 @@ export const createRealtimeServer = (
 
   const dispose = async (): Promise<void> => {
     clearInterval(interval);
+    owners.clear();
     await server.stop(true);
     await rooms.disposeAll();
   };
@@ -312,7 +338,11 @@ class RealtimeServer extends Context.Service<
       );
       const resource = yield* Effect.acquireRelease(
         Effect.sync(() =>
-          createRealtimeServer(port, Option.getOrNull(ledgerDirectory))
+          createRealtimeServer({
+            ledgerDirectory: Option.getOrNull(ledgerDirectory),
+            port,
+            resumeTtlMs: RESUME_TTL_MS,
+          })
         ),
         (running) =>
           Effect.promise(async () => {
