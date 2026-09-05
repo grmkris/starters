@@ -37,3 +37,31 @@ export const recordInputs = (page: Page): InputVector[] => {
   });
   return inputs;
 };
+
+const DuelFrame = Schema.Struct({
+  phase: Schema.String,
+  projectiles: Schema.Array(
+    Schema.Struct({ position: Schema.Struct({ x: Schema.Finite }) })
+  ),
+  type: Schema.Literals(["duel.snapshot"]),
+});
+
+const decodeDuelFrame = Schema.decodeUnknownResult(
+  Schema.fromJsonString(DuelFrame)
+);
+
+export type DuelFrame = typeof DuelFrame.Type;
+
+/** Collects every duel snapshot the page receives. Register before `goto`. */
+export const recordDuelSnapshots = (page: Page): DuelFrame[] => {
+  const frames: DuelFrame[] = [];
+  page.on("websocket", (socket) => {
+    socket.on("framereceived", (frame) => {
+      const decoded = decodeDuelFrame(String(frame.payload));
+      if (Result.isSuccess(decoded)) {
+        frames.push(decoded.success);
+      }
+    });
+  });
+  return frames;
+};

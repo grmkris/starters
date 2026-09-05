@@ -11,7 +11,6 @@ import {
   TooltipTrigger,
 } from "@agent-native/ui/components/tooltip";
 import { cn } from "@agent-native/ui/lib/utils";
-import { Effect, Fiber } from "effect";
 import { ActivityIcon, RadioTowerIcon, SendIcon } from "lucide-react";
 import {
   lazy,
@@ -24,10 +23,8 @@ import {
 
 import { Thumbstick } from "../components/thumbstick";
 import { useMovementInput } from "../hooks/use-movement-input";
-import { realtimeProgram } from "../lib/realtime-client";
 import { realtimeStore } from "../lib/realtime-store";
 import { readScenePalette } from "../lib/scene-palette";
-import { realtimeUrl } from "../lib/socket-url";
 
 /**
  * `import.meta.env.DEV` is replaced with a literal at build time, so the whole
@@ -55,9 +52,8 @@ export const RuntimePage = () => {
 
   useEffect(() => {
     realtimeStore.joinRoom(LOBBY_ROOM_ID);
-    const fiber = Effect.runFork(realtimeProgram(realtimeStore, realtimeUrl()));
     return () => {
-      Effect.runFork(Fiber.interrupt(fiber));
+      realtimeStore.leaveRoom();
     };
   }, []);
 

@@ -25,7 +25,29 @@ const architectureRoute = createRoute({
   path: "/architecture",
 });
 
-const routeTree = rootRoute.addChildren([indexRoute, architectureRoute]);
+const duelRoute = createRoute({
+  component: lazyRouteComponent(
+    async () => await import("./routes/duel-page"),
+    "DuelPage"
+  ),
+  getParentRoute: () => rootRoute,
+  path: "/duel",
+});
+const duelRoomRoute = createRoute({
+  component: lazyRouteComponent(
+    async () => await import("./routes/duel-room-page"),
+    "DuelRoomPage"
+  ),
+  getParentRoute: () => rootRoute,
+  path: "/duel/$code",
+});
+
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  architectureRoute,
+  duelRoute,
+  duelRoomRoute,
+]);
 
 export const router = createRouter({ routeTree });
 

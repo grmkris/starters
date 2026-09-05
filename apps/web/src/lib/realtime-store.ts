@@ -120,6 +120,14 @@ export class RealtimeStore implements WorldSource {
    * so a reconnect lands back where the page was rather than in a default.
    */
   #room: RoomId | null = null;
+  /**
+   * A duel the page asked for before the socket was open, or that must be
+   * asked for again after a drop that happened before the room existed.
+   */
+  #duelRequest:
+    | { readonly kind: "create" }
+    | { readonly kind: "find"; readonly code: RoomCode }
+    | null = null;
   /** What the next `room.join` presents. Null until a join has succeeded. */
   #identity: ResumeClaim | null;
   /** The token the current connection was welcomed with. */
@@ -175,34 +183,47 @@ export class RealtimeStore implements WorldSource {
     this.#updateMeta({ lastError: null, status: "live" });
     if (this.#room !== null) {
       this.#sendJoin(this.#room);
+    } else if (this.#duelRequest !== null) {
+      this.#sendDuelRequest();
     }
   }
 
   /** Asks for `roomId` now and again on every reconnect. */
   joinRoom(roomId: RoomId): void {
     this.#room = roomId;
+    this.#duelRequest = null;
     this.#sendJoin(roomId);
+  }
+
+  /** Gives the room back. A page leaving is the one thing that ends a duel. */
+  leaveRoom(): void {
+    const wasIn = this.#room;
+    this.#room = null;
+    this.#duelRequest = null;
+    this.#updateDuel(initialDuel);
+    if (wasIn !== null) {
+      this.#send({
+        seq: this.#nextSequence(),
+        type: "room.leave",
+        v: PROTOCOL_VERSION,
+      });
+    }
   }
 
   /** Asks the server for a fresh duel; `duel.created` joins it. */
   createDuel(): void {
-    this.#updateDuel({ ...initialDuel });
-    this.#send({
-      seq: this.#nextSequence(),
-      type: "duel.create",
-      v: PROTOCOL_VERSION,
-    });
+    this.#room = null;
+    this.#duelRequest = { kind: "create" };
+    this.#updateDuel(initialDuel);
+    this.#sendDuelRequest();
   }
 
   /** Resolves a code somebody read out; `duel.found` joins it. */
   findDuel(code: RoomCode): void {
+    this.#room = null;
+    this.#duelRequest = { code, kind: "find" };
     this.#updateDuel({ ...initialDuel, code });
-    this.#send({
-      code,
-      seq: this.#nextSequence(),
-      type: "duel.join",
-      v: PROTOCOL_VERSION,
-    });
+    this.#sendDuelRequest();
   }
 
   duelMove(target: number): void {
@@ -371,6 +392,27 @@ export class RealtimeStore implements WorldSource {
       sentAt: Date.now(),
       seq: this.#nextSequence(),
       type: "ping",
+      v: PROTOCOL_VERSION,
+    });
+  }
+
+  #sendDuelRequest(): void {
+    const request = this.#duelRequest;
+    if (request === null) {
+      return;
+    }
+    if (request.kind === "create") {
+      this.#send({
+        seq: this.#nextSequence(),
+        type: "duel.create",
+        v: PROTOCOL_VERSION,
+      });
+      return;
+    }
+    this.#send({
+      code: request.code,
+      seq: this.#nextSequence(),
+      type: "duel.join",
       v: PROTOCOL_VERSION,
     });
   }
