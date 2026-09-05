@@ -129,6 +129,18 @@ export const DuelSnapshot = Schema.Struct(DuelSnapshotFields);
 export type DuelSnapshot = typeof DuelSnapshot.Type;
 
 /**
+ * The field as the client renders and aims against it. `game-core` owns the
+ * same numbers and may not import this package, so a server test holds the
+ * two equal rather than one importing the other.
+ */
+export const DUEL_FIELD = {
+  halfWidth: 4,
+  laneHalfHeight: 4.35,
+  maxFireAngle: Math.PI / 3,
+  playerX: 3,
+} as const;
+
+/**
  * What one phone shows the other to join. Four characters from an alphabet
  * without I, O, 0 and 1, which are the ones people misread when typing a code
  * off somebody else's screen. Not a secret: it names a room for a minute.
