@@ -1,3 +1,4 @@
+import { PROTOCOL_VERSION } from "@agent-native/domain";
 import type { ClientId, MovementInput, RoomId } from "@agent-native/domain";
 import { createSimulation } from "@agent-native/game-core";
 import type { PlayerState, Simulation } from "@agent-native/game-core";
@@ -86,7 +87,7 @@ export const createRooms = (options: RoomsOptions): Rooms => {
 
     ledger?.record({
       format: LEDGER_FORMAT,
-      protocol: 1,
+      protocol: PROTOCOL_VERSION,
       roomId,
       startedAt,
       tickRate: options.tickRate,

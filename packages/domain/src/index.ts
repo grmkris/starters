@@ -62,10 +62,3 @@ export const makeResumeToken = (): ResumeToken => {
     Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")
   );
 };
-
-export class InvalidProtocolMessage extends Schema.TaggedError<InvalidProtocolMessage>()(
-  "InvalidProtocolMessage",
-  {
-    message: Schema.String,
-  }
-) {}

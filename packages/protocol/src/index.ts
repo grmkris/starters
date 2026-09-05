@@ -52,10 +52,9 @@ const RejectionReason = Schema.Literals([
   "already_in_room",
   "room_full",
   "server_full",
-  "unavailable",
 ]);
 
-const DepartureReason = Schema.Literals(["client_request", "room_closed"]);
+const DepartureReason = Schema.Literals(["client_request"]);
 
 /** Only the codes the server actually emits. */
 const ProtocolErrorCode = Schema.Literals(["invalid_message", "not_in_room"]);
