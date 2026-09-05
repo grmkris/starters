@@ -40,7 +40,8 @@ export type PlayerSnapshot = typeof PlayerSnapshot.Type;
  *
  * It grants identity only: the server respawns the entity, so holding a stolen
  * token gets you somebody's name and colour, never their position or progress.
- * Nothing here is a substitute for authentication; see docs/decisions/.
+ * Nothing here is a substitute for authentication; see
+ * docs/decisions/0005-resume-tokens.md.
  */
 export const ResumeToken = Schema.String.pipe(
   Schema.check(
