@@ -4,11 +4,16 @@ import { useEffect, useRef } from "react";
 import { realtimeStore } from "../lib/realtime-store";
 import type { ConnectionStatus } from "../lib/realtime-store";
 
-const MOVEMENT_KEYS = new Set(["a", "d", "s", "w"]);
+/**
+ * Physical keys, not characters. `event.code` names the key under the finger
+ * whatever the layout, so the WASD cluster works on AZERTY and Dvorak, where
+ * `event.key` for the same keys is Z/Q/S/D and comma/A/O/E.
+ */
+const MOVEMENT_CODES = new Set(["KeyA", "KeyD", "KeyS", "KeyW"]);
 
 const vectorOf = (pressed: ReadonlySet<string>): MovementInput => ({
-  x: Number(pressed.has("d")) - Number(pressed.has("a")),
-  z: Number(pressed.has("s")) - Number(pressed.has("w")),
+  x: Number(pressed.has("KeyD")) - Number(pressed.has("KeyA")),
+  z: Number(pressed.has("KeyS")) - Number(pressed.has("KeyW")),
 });
 
 export const useMovementInput = (status: ConnectionStatus): void => {
@@ -18,14 +23,14 @@ export const useMovementInput = (status: ConnectionStatus): void => {
     const keys = pressed.current;
 
     const onKeyChange = (event: KeyboardEvent, held: boolean): void => {
-      const key = event.key.toLowerCase();
-      if (!MOVEMENT_KEYS.has(key)) {
+      const { code } = event;
+      if (!MOVEMENT_CODES.has(code)) {
         return;
       }
       if (held) {
-        keys.add(key);
+        keys.add(code);
       } else {
-        keys.delete(key);
+        keys.delete(code);
       }
       realtimeStore.sendInput(vectorOf(keys));
     };

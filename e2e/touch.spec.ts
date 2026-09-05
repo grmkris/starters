@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { Result, Schema } from "effect";
+
+import { recordInputs } from "./input-frames";
 
 // Emulation reports `(pointer: coarse)`, which is what reveals the control.
 test.use({
@@ -8,33 +9,8 @@ test.use({
   viewport: { height: 844, width: 390 },
 });
 
-/**
- * The frame shape this test cares about, decoded rather than type-guarded, so
- * a malformed frame fails the parse instead of being narrowed into shape.
- */
-const InputFrame = Schema.Struct({
-  input: Schema.Struct({ x: Schema.Finite, z: Schema.Finite }),
-  type: Schema.Literals(["player.input"]),
-});
-
-const decodeInputFrame = Schema.decodeUnknownResult(
-  Schema.fromJsonString(InputFrame)
-);
-
 test("the thumbstick puts movement on the socket", async ({ page }) => {
-  // Asserting on sent frames rather than on the DOM: the avatar's position
-  // never reaches the document, and the claim under test is precisely that a
-  // pointer drag reaches `sendInput`.
-  const inputs: { readonly x: number; readonly z: number }[] = [];
-  page.on("websocket", (socket) => {
-    socket.on("framesent", (frame) => {
-      const decoded = decodeInputFrame(String(frame.payload));
-      if (Result.isSuccess(decoded)) {
-        inputs.push(decoded.success.input);
-      }
-    });
-  });
-
+  const inputs = recordInputs(page);
   await page.goto("/");
 
   const stick = page.getByTestId("thumbstick");
