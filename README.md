@@ -26,10 +26,10 @@ To see the simulation reproduce itself, record a session and replay it:
 
 ```bash
 LEDGER_DIR=.ledger bun run dev:server   # play in the browser, then stop the server
-bun run --cwd apps/server replay .ledger/room-*.ndjson
+bun run --cwd apps/server replay .ledger/rom_<room>-<started>.ndjson
 ```
 
-The runner rebuilds the room from the ledger using the same `packages/game-core` the server runs, and compares itself to what was recorded at every tick. `docs/decisions/0003-deterministic-replay.md` records why.
+Each room writes one file per server run, named by its room id and start time, and the runner takes one file. It rebuilds the room from the ledger using the same `packages/game-core` the server runs, and compares itself to what was recorded at every tick. `docs/decisions/0003-deterministic-replay.md` records why.
 
 `check` runs Oxfmt, type-aware Oxlint/anti-slop, strict TypeScript, architecture boundaries, agent-skill validation, Bun tests, and Knip. Foundry and Playwright remain explicit gates because they own separate native toolchains. CI runs all three layers on every pull request and main-branch push.
 
