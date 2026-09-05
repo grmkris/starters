@@ -33,6 +33,17 @@ Each room writes one file per server run, named by its room id and start time, a
 
 `check` runs Oxfmt, type-aware Oxlint/anti-slop, strict TypeScript, architecture boundaries, agent-skill validation, Bun tests, and Knip. Foundry and Playwright remain explicit gates because they own separate native toolchains. CI runs all three layers on every pull request and main-branch push.
 
+## Deploy it
+
+One container is a deployment. The Dockerfile builds the page and starts the server, which serves `apps/web/dist` on the same origin as `/realtime` and `/health`, so the client needs no configuration. `railway.json` selects the Dockerfile and points Railway's health check at `/health`.
+
+```bash
+docker build -t field01 . && docker run --rm -p 3001:3001 field01   # try the image locally
+railway up --service field01 --ci -m "<what changed>"                 # ship it
+```
+
+The server keeps rooms and resume claims in memory, so every deploy starts them empty. Vercel Functions can upgrade WebSockets, but they replicate and suspend, and two instances of this server would be two worlds; the page alone could live there with `VITE_WS_URL` pointing at the server.
+
 ## Repository map
 
 - `apps/web` — Vite, React 19, TanStack Router, wagmi, realtime browser adapter.
