@@ -1,6 +1,6 @@
 import { Grid, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useRef, useSyncExternalStore } from "react";
+import { useMemo, useRef, useSyncExternalStore } from "react";
 import type { Mesh } from "three";
 
 import type { WorldSource } from "./world-source";
@@ -91,10 +91,20 @@ interface SceneProps {
 }
 
 const Scene = ({ feel, localClientId, palette, source }: SceneProps) => {
+  // Bound once per source. `useSyncExternalStore` resubscribes whenever the
+  // subscribe function's identity changes, and `bind` returns a new function
+  // on every call, so binding inline resubscribed on every render.
+  const accessors = useMemo(
+    () => ({
+      getRoster: source.getRosterSnapshot.bind(source),
+      subscribe: source.subscribeRoster.bind(source),
+    }),
+    [source]
+  );
   const roster = useSyncExternalStore(
-    source.subscribeRoster.bind(source),
-    source.getRosterSnapshot.bind(source),
-    source.getRosterSnapshot.bind(source)
+    accessors.subscribe,
+    accessors.getRoster,
+    accessors.getRoster
   );
 
   return (
