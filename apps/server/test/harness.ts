@@ -219,6 +219,7 @@ export const startHarness = ({
     ledgerDirectory,
     port: 0,
     resumeTtlMs,
+    site: null,
   });
   const { port } = resource.server;
   if (port === undefined) {

@@ -1,0 +1,16 @@
+.git
+node_modules
+**/node_modules
+**/dist
+.turbo
+**/.turbo
+**/*.tsbuildinfo
+test-results
+playwright-report
+.ledger
+**/.ledger
+.fallow
+packages/contracts/out
+packages/contracts/cache
+docs/research
+tools/spikes

@@ -12,6 +12,8 @@ import { Config, Context, Effect, Layer, Option, Result } from "effect";
 import { createResumeRegistry } from "./resume";
 import { createRooms } from "./rooms";
 import type { RealtimeSocket, Room, SocketData } from "./rooms";
+import { createStaticSite } from "./static";
+import type { StaticSite } from "./static";
 import { createTickPacer } from "./tick-pacer";
 
 const TICK_RATE = 20;
@@ -29,6 +31,11 @@ export interface ServerOptions {
   readonly ledgerDirectory: string | null;
   /** How long a disconnected client may reclaim its identity. */
   readonly resumeTtlMs: number;
+  /**
+   * The built web app, served on this origin when present. Null in tests and
+   * in development, where Vite serves the page and proxies the socket here.
+   */
+  readonly site: StaticSite | null;
 }
 
 export interface ServerResource {
@@ -65,6 +72,7 @@ export const createRealtimeServer = ({
   ledgerDirectory,
   port,
   resumeTtlMs,
+  site,
 }: ServerOptions): ServerResource => {
   const rooms = createRooms({
     capacity: ROOM_CAPACITY,
@@ -126,7 +134,7 @@ export const createRealtimeServer = ({
   };
 
   const server = Bun.serve<SocketData>({
-    fetch(request, bunServer) {
+    async fetch(request, bunServer) {
       const url = new URL(request.url);
 
       if (url.pathname === "/health") {
@@ -135,6 +143,7 @@ export const createRealtimeServer = ({
             status: "ok",
             runtime: "bun",
             rooms: rooms.count(),
+            site: site !== null,
           },
           { headers: responseHeaders }
         );
@@ -155,6 +164,10 @@ export const createRealtimeServer = ({
               { error: "websocket_upgrade_failed" },
               { status: 400, headers: responseHeaders }
             );
+      }
+
+      if (site !== null) {
+        return await site.respond(url.pathname);
       }
 
       return Response.json(
@@ -336,12 +349,22 @@ class RealtimeServer extends Context.Service<
       const ledgerDirectory = yield* Config.string("LEDGER_DIR").pipe(
         Config.option
       );
+      // Where `vite build` puts the page. Present in the container, absent in
+      // development, and the server is honest about which by serving the
+      // JSON index it always had when there is nothing to serve.
+      const webDirectory = yield* Config.string("WEB_DIST").pipe(
+        Config.withDefault(`${import.meta.dir}/../../web/dist`)
+      );
+      const site = yield* Effect.promise(
+        async () => await createStaticSite(webDirectory)
+      );
       const resource = yield* Effect.acquireRelease(
         Effect.sync(() =>
           createRealtimeServer({
             ledgerDirectory: Option.getOrNull(ledgerDirectory),
             port,
             resumeTtlMs: RESUME_TTL_MS,
+            site,
           })
         ),
         (running) =>
@@ -350,7 +373,9 @@ class RealtimeServer extends Context.Service<
           })
       );
       const url = `http://localhost:${resource.server.port}`;
-      yield* Effect.logInfo(`HTTP + WebSocket server listening at ${url}`);
+      yield* Effect.logInfo(
+        `HTTP + WebSocket server listening at ${url}${site === null ? "" : `, serving ${webDirectory}`}`
+      );
       return RealtimeServer.of({ url });
     })
   );
