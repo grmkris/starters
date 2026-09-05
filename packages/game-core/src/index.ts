@@ -1,11 +1,33 @@
-import { createWorld, trait } from "koota";
+import { createWorld } from "koota";
 import type { Entity, World } from "koota";
 
-const MAX_SPEED = 3.5;
+import { Movement, Player, Position } from "./traits";
 
-export const Player = trait({ clientId: "" });
-export const Position = trait({ x: 0, y: 0.5, z: 0 });
-export const Movement = trait({ x: 0, z: 0 });
+export {
+  COUNTDOWN_SECONDS,
+  createDuelSimulation,
+  FIELD_HALF_WIDTH,
+  FIRE_COOLDOWN_SECONDS,
+  HITS_TO_KILL,
+  LANE_HALF_HEIGHT,
+  MAX_FIRE_ANGLE,
+  PLAYER_RADIUS,
+  PLAYER_X,
+  PROJECTILE_SPEED,
+  ROUND_OVER_SECONDS,
+  ROUNDS_TO_WIN,
+} from "./duel";
+export type {
+  DuelPhase,
+  DuelPlayerState,
+  DuelSimulation,
+  DuelSnapshot,
+  ProjectileState,
+  Side,
+} from "./duel";
+export { Movement, Player, Position } from "./traits";
+
+const MAX_SPEED = 3.5;
 
 /**
  * `Id` lets a host narrow the client identifier to its own branded type
