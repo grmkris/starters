@@ -35,6 +35,13 @@ const memoryStorage = () => {
   return { entries, storage };
 };
 
+/** A store that, like the runtime page, wants the lobby. */
+const lobbyStore = (storage: IdentityStorage | null): RealtimeStore => {
+  const store = new RealtimeStore(storage);
+  store.joinRoom(LOBBY_ROOM_ID);
+  return store;
+};
+
 const openSocket = () => {
   const sent: string[] = [];
   const socket: OutboundSocket = {
@@ -87,7 +94,7 @@ const welcomeAndJoin = (
 
 describe("realtime store identity", () => {
   test("joins without a claim when it has never been joined", () => {
-    const store = new RealtimeStore(memoryStorage().storage);
+    const store = lobbyStore(memoryStorage().storage);
     const { sent, socket } = openSocket();
 
     store.attach(socket);
@@ -97,7 +104,7 @@ describe("realtime store identity", () => {
 
   test("presents the identity it was joined with on the next connection", () => {
     const { entries, storage } = memoryStorage();
-    const store = new RealtimeStore(storage);
+    const store = lobbyStore(storage);
     const clientId = ClientId.generate();
     store.attach(openSocket().socket);
 
@@ -110,7 +117,7 @@ describe("realtime store identity", () => {
   });
 
   test("keeps the identity the world chose, with the token it was welcomed with", () => {
-    const store = new RealtimeStore(memoryStorage().storage);
+    const store = lobbyStore(memoryStorage().storage);
     const welcomed = ClientId.generate();
     const reclaimed = ClientId.generate();
     store.attach(openSocket().socket);
@@ -128,13 +135,9 @@ describe("realtime store identity", () => {
   test("restores an identity a previous page stored", () => {
     const { storage } = memoryStorage();
     const clientId = ClientId.generate();
-    const resumeToken = welcomeAndJoin(
-      new RealtimeStore(storage),
-      clientId,
-      clientId
-    );
+    const resumeToken = welcomeAndJoin(lobbyStore(storage), clientId, clientId);
 
-    const reloaded = new RealtimeStore(storage);
+    const reloaded = lobbyStore(storage);
     const { sent, socket } = openSocket();
     reloaded.attach(socket);
 
@@ -144,7 +147,7 @@ describe("realtime store identity", () => {
   test("ignores a stored identity it cannot decode", () => {
     const { entries, storage } = memoryStorage();
     entries.set("field01.identity", '{"clientId":"nobody"}');
-    const store = new RealtimeStore(storage);
+    const store = lobbyStore(storage);
     const { sent, socket } = openSocket();
 
     store.attach(socket);
@@ -154,7 +157,7 @@ describe("realtime store identity", () => {
 
   test("drops the identity once told another connection holds it", () => {
     const { entries, storage } = memoryStorage();
-    const store = new RealtimeStore(storage);
+    const store = lobbyStore(storage);
     const clientId = ClientId.generate();
     store.attach(openSocket().socket);
     welcomeAndJoin(store, clientId, clientId);
@@ -168,7 +171,7 @@ describe("realtime store identity", () => {
   });
 
   test("works without any storage at all", () => {
-    const store = new RealtimeStore(null);
+    const store = lobbyStore(null);
     const clientId = ClientId.generate();
     store.attach(openSocket().socket);
 

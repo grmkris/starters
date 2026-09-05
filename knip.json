@@ -1,5 +1,5 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignore": ["tools/spikes/**", ".claude/**", ".codex/**", ".grok/**"],
+  "ignore": ["tools/spikes/**"],
   "ignoreBinaries": ["forge"]
 }

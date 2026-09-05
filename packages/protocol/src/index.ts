@@ -1,9 +1,13 @@
 import {
   ClientId,
+  DuelFire,
+  DuelMove,
+  DuelSnapshotFields,
   MovementInput,
   PlayerSnapshot,
   ProtocolVersion,
   ResumeToken,
+  RoomCode,
   RoomId,
 } from "@agent-native/domain";
 import { Schema } from "effect";
@@ -47,6 +51,31 @@ const ClientMessage = Schema.Union([
     sentAt: Schema.Int,
     type: Schema.Literals(["ping"]),
   }),
+  // Duel. Creating or finding a room does not join it: the client then sends
+  // `room.join` with the id it was given, so joining has one path.
+  Schema.Struct({
+    ...Envelope,
+    type: Schema.Literals(["duel.create"]),
+  }),
+  Schema.Struct({
+    ...Envelope,
+    code: RoomCode,
+    type: Schema.Literals(["duel.join"]),
+  }),
+  Schema.Struct({
+    ...Envelope,
+    move: DuelMove,
+    type: Schema.Literals(["duel.move"]),
+  }),
+  Schema.Struct({
+    ...Envelope,
+    fire: DuelFire,
+    type: Schema.Literals(["duel.fire"]),
+  }),
+  Schema.Struct({
+    ...Envelope,
+    type: Schema.Literals(["duel.rematch"]),
+  }),
 ]);
 
 /** Why a join was refused. `server_full` is the only one where retrying the same room is pointless. */
@@ -59,7 +88,11 @@ const RejectionReason = Schema.Literals([
 const DepartureReason = Schema.Literals(["client_request"]);
 
 /** Only the codes the server actually emits. */
-const ProtocolErrorCode = Schema.Literals(["invalid_message", "not_in_room"]);
+const ProtocolErrorCode = Schema.Literals([
+  "invalid_message",
+  "not_in_room",
+  "wrong_room_kind",
+]);
 
 const ServerMessage = Schema.Union([
   Schema.Struct({
@@ -117,6 +150,29 @@ const ServerMessage = Schema.Union([
     code: ProtocolErrorCode,
     message: Schema.String,
     type: Schema.Literals(["protocol.error"]),
+  }),
+  Schema.Struct({
+    ...Envelope,
+    code: RoomCode,
+    roomId: RoomId,
+    type: Schema.Literals(["duel.created"]),
+  }),
+  Schema.Struct({
+    ...Envelope,
+    roomId: RoomId,
+    type: Schema.Literals(["duel.found"]),
+  }),
+  Schema.Struct({
+    ...Envelope,
+    code: RoomCode,
+    type: Schema.Literals(["duel.notFound"]),
+  }),
+  Schema.Struct({
+    ...Envelope,
+    ...DuelSnapshotFields,
+    roomId: RoomId,
+    tick: Schema.Int,
+    type: Schema.Literals(["duel.snapshot"]),
   }),
 ]);
 

@@ -1,3 +1,4 @@
+import { LOBBY_ROOM_ID } from "@agent-native/domain";
 import type { ClientId } from "@agent-native/domain";
 import { defaultWorldFeel, WorldCanvas } from "@agent-native/game-three";
 import type { WorldFeel } from "@agent-native/game-three";
@@ -53,6 +54,7 @@ export const RuntimePage = () => {
   );
 
   useEffect(() => {
+    realtimeStore.joinRoom(LOBBY_ROOM_ID);
     const fiber = Effect.runFork(realtimeProgram(realtimeStore, realtimeUrl()));
     return () => {
       Effect.runFork(Fiber.interrupt(fiber));

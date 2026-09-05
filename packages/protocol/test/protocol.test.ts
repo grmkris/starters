@@ -106,6 +106,69 @@ describe("wire protocol", () => {
     expect(Result.isFailure(decoded)).toBe(true);
   });
 
+  test("round-trips a shot across the seam", () => {
+    const decoded = decodeClientMessage(
+      encodeClientMessage({
+        fire: { angle: 0.5 },
+        seq: 3,
+        type: "duel.fire",
+        v: PROTOCOL_VERSION,
+      })
+    );
+
+    expect(Result.isSuccess(decoded)).toBe(true);
+    if (Result.isSuccess(decoded) && decoded.success.type === "duel.fire") {
+      expect(decoded.success.fire.angle).toBe(0.5);
+    }
+  });
+
+  test("rejects a shot with no finite angle", () => {
+    const decoded = decodeClientMessage(
+      JSON.stringify({
+        fire: { angle: "up" },
+        seq: 3,
+        type: "duel.fire",
+        v: PROTOCOL_VERSION,
+      })
+    );
+
+    expect(Result.isFailure(decoded)).toBe(true);
+  });
+
+  test("rejects a room code with a character people misread", () => {
+    const decoded = decodeClientMessage(
+      JSON.stringify({
+        code: "AB0I",
+        seq: 1,
+        type: "duel.join",
+        v: PROTOCOL_VERSION,
+      })
+    );
+
+    expect(Result.isFailure(decoded)).toBe(true);
+  });
+
+  test("encodes a duel snapshot with a null winner", () => {
+    const encoded = encodeServerMessage({
+      countdown: 2.5,
+      phase: "countdown",
+      players: [],
+      projectiles: [],
+      roomId: LOBBY_ROOM_ID,
+      round: 1,
+      seq: 4,
+      tick: 40,
+      type: "duel.snapshot",
+      v: PROTOCOL_VERSION,
+      winner: null,
+    });
+
+    expect(JSON.parse(encoded)).toMatchObject({
+      phase: "countdown",
+      winner: null,
+    });
+  });
+
   test("encodes snapshots as transport-safe JSON", () => {
     const encoded = encodeServerMessage({
       players: [

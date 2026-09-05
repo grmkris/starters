@@ -31,6 +31,7 @@ const recordSession = () => {
   const records: LedgerRecord[] = [
     {
       format: LEDGER_FORMAT,
+      kind: "lobby",
       protocol: 1,
       roomId: LOBBY_ROOM_ID,
       startedAt: 0,

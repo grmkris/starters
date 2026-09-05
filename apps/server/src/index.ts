@@ -1,4 +1,4 @@
-import { ClientId, makeResumeToken } from "@agent-native/domain";
+import { ClientId, makeResumeToken, RoomId } from "@agent-native/domain";
 import type { ClientId as ClientIdType } from "@agent-native/domain";
 import {
   decodeClientMessage,
@@ -9,9 +9,10 @@ import type { ServerMessageBody } from "@agent-native/protocol";
 import { BunRuntime } from "@effect/platform-bun";
 import { Config, Context, Effect, Layer, Option, Result } from "effect";
 
+import { createRoomCodes } from "./codes";
 import { createResumeRegistry } from "./resume";
 import { createRooms } from "./rooms";
-import type { RealtimeSocket, Room, SocketData } from "./rooms";
+import type { CaptureOutcome, RealtimeSocket, Room, SocketData } from "./rooms";
 import { createStaticSite } from "./static";
 import type { StaticSite } from "./static";
 import { createTickPacer } from "./tick-pacer";
@@ -24,6 +25,8 @@ const ROOM_CAPACITY = 16;
 const MAX_ROOMS = 12;
 /** How long a disconnected client may reclaim its identity. */
 export const RESUME_TTL_MS = 60_000;
+/** How long a duel code stays typeable. Long enough to read it out twice. */
+const ROOM_CODE_TTL_MS = 10 * 60_000;
 
 export interface ServerOptions {
   /** `0` asks the host for an ephemeral port. */
@@ -82,6 +85,7 @@ export const createRealtimeServer = ({
   });
 
   const claims = createResumeRegistry(resumeTtlMs);
+  const codes = createRoomCodes(ROOM_CODE_TTL_MS);
   /** The socket each identity currently belongs to. */
   const owners = new Map<ClientIdType, RealtimeSocket>();
 
@@ -107,6 +111,32 @@ export const createRealtimeServer = ({
     const room = rooms.leave(socket);
     if (room !== null) {
       announcePresence(room);
+    }
+  };
+
+  /** Reports why intent was not taken, or nothing when it was. */
+  const refuse = (socket: RealtimeSocket, outcome: CaptureOutcome): void => {
+    switch (outcome) {
+      case "captured": {
+        return;
+      }
+      case "not_in_room": {
+        send(socket, {
+          code: "not_in_room",
+          message: "Input arrived before a room was joined",
+          type: "protocol.error",
+          v: 1,
+        });
+        return;
+      }
+      case "wrong_room_kind": {
+        send(socket, {
+          code: "wrong_room_kind",
+          message: "This room does not run the rules that input belongs to",
+          type: "protocol.error",
+          v: 1,
+        });
+      }
     }
   };
 
@@ -220,7 +250,12 @@ export const createRealtimeServer = ({
               adopt(socket, message.resume.clientId);
             }
 
-            const outcome = rooms.join(socket, message.roomId);
+            // A room keeps the rules it was created with; a new one runs a
+            // duel only if its id was minted for one.
+            const kind =
+              rooms.get(message.roomId)?.kind ??
+              (codes.isDuel(message.roomId) ? "duel" : "lobby");
+            const outcome = rooms.join(socket, message.roomId, kind);
             if (outcome.kind === "rejected") {
               // Membership failed, not the transport: the socket stays open so
               // a client can pick another room without a reconnect.
@@ -265,14 +300,48 @@ export const createRealtimeServer = ({
             break;
           }
           case "player.input": {
-            if (!rooms.capture(socket, message.input)) {
+            refuse(socket, rooms.capture(socket, message.input));
+            break;
+          }
+          case "duel.create": {
+            const roomId = RoomId.generate();
+            send(socket, {
+              code: codes.mint(roomId),
+              roomId,
+              type: "duel.created",
+              v: 1,
+            });
+            break;
+          }
+          case "duel.join": {
+            const roomId = codes.lookup(message.code);
+            if (roomId === undefined) {
               send(socket, {
-                code: "not_in_room",
-                message: "Input arrived before a room was joined",
-                type: "protocol.error",
+                code: message.code,
+                type: "duel.notFound",
                 v: 1,
               });
+            } else {
+              send(socket, { roomId, type: "duel.found", v: 1 });
             }
+            break;
+          }
+          case "duel.move": {
+            refuse(
+              socket,
+              rooms.captureDuel(socket, { move: message.move.target })
+            );
+            break;
+          }
+          case "duel.fire": {
+            refuse(
+              socket,
+              rooms.captureDuel(socket, { fire: message.fire.angle })
+            );
+            break;
+          }
+          case "duel.rematch": {
+            refuse(socket, rooms.captureDuel(socket, { rematch: true }));
             break;
           }
           case "ping": {
@@ -312,16 +381,27 @@ export const createRealtimeServer = ({
     // One clock for every room. N intervals would be N drifting clocks and N
     // teardown paths to miss; the cost of walking a map of at most MAX_ROOMS
     // entries at 20Hz is nil.
-    for (const { players, room } of rooms.advance(owed, FIXED_DELTA_SECONDS)) {
+    for (const advanced of rooms.advance(owed, FIXED_DELTA_SECONDS)) {
       // Snapshots carry whole state rather than deltas, so a catch-up run
       // broadcasts once at the tick it reached.
-      broadcast(room, {
-        players,
-        roomId: room.id,
-        tick: room.tick,
-        type: "world.snapshot",
-        v: 1,
-      });
+      const { room } = advanced;
+      if (advanced.kind === "duel") {
+        broadcast(room, {
+          ...advanced.snapshot,
+          roomId: room.id,
+          tick: room.tick,
+          type: "duel.snapshot",
+          v: 1,
+        });
+      } else {
+        broadcast(room, {
+          players: advanced.players,
+          roomId: room.id,
+          tick: room.tick,
+          type: "world.snapshot",
+          v: 1,
+        });
+      }
     }
   }, TICK_MS);
 

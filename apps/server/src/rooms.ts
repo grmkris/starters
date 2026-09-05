@@ -1,18 +1,28 @@
 import { PROTOCOL_VERSION } from "@agent-native/domain";
 import type {
   ClientId,
+  DuelSnapshot,
   MovementInput,
   ResumeToken,
   RoomId,
 } from "@agent-native/domain";
-import { createSimulation } from "@agent-native/game-core";
-import type { PlayerState, Simulation } from "@agent-native/game-core";
+import {
+  createDuelSimulation,
+  createSimulation,
+} from "@agent-native/game-core";
+import type {
+  DuelSimulation,
+  PlayerState,
+  Simulation,
+} from "@agent-native/game-core";
 import type { ServerMessage } from "@agent-native/protocol";
 
+import { createDuelInputBuffer } from "./duel-input";
+import type { DuelInputBuffer } from "./duel-input";
 import { createInputBuffer } from "./input-buffer";
 import type { InputBuffer } from "./input-buffer";
 import { createLedger, LEDGER_FORMAT } from "./ledger";
-import type { Ledger } from "./ledger";
+import type { Ledger, RoomKind } from "./ledger";
 
 /**
  * Room membership and per-room world state.
@@ -20,6 +30,10 @@ import type { Ledger } from "./ledger";
  * Kept out of index.ts so it can be driven without binding a socket, and so the
  * lifecycle rules live next to the state they protect rather than inside a
  * websocket handler.
+ *
+ * A room has a kind, fixed when it is created, that says which rules run in
+ * it: the free-roam lobby world, or a duel. The kind decides the capacity,
+ * the input that is legal, what the ledger records, and what is broadcast.
  */
 
 export interface SocketData {
@@ -39,29 +53,68 @@ type RejectionReason = Extract<
   { readonly type: "room.rejected" }
 >["reason"];
 
-export interface Room {
+interface RoomBase {
   readonly id: RoomId;
-  readonly simulation: Simulation<ClientId>;
-  readonly inputs: InputBuffer<ClientId>;
   readonly sockets: Set<RealtimeSocket>;
   readonly ledger: Ledger | null;
   readonly capacity: number;
   tick: number;
 }
 
+interface LobbyRoom extends RoomBase {
+  readonly kind: "lobby";
+  readonly simulation: Simulation<ClientId>;
+  readonly inputs: InputBuffer<ClientId>;
+}
+
+interface DuelRoom extends RoomBase {
+  readonly kind: "duel";
+  readonly duel: DuelSimulation<ClientId>;
+  readonly inputs: DuelInputBuffer<ClientId>;
+}
+
+export type Room = LobbyRoom | DuelRoom;
+
 type JoinOutcome =
   | { readonly kind: "joined"; readonly room: Room }
   | { readonly kind: "rejected"; readonly reason: RejectionReason };
 
-interface AdvancedRoom {
-  readonly room: Room;
-  readonly players: readonly PlayerState<ClientId>[];
+/** Why intent was not taken: no room, or a room running other rules. */
+export type CaptureOutcome = "captured" | "not_in_room" | "wrong_room_kind";
+
+type AdvancedRoom =
+  | {
+      readonly kind: "lobby";
+      readonly room: LobbyRoom;
+      readonly players: readonly PlayerState<ClientId>[];
+    }
+  | {
+      readonly kind: "duel";
+      readonly room: DuelRoom;
+      readonly snapshot: DuelSnapshot;
+    };
+
+interface DuelIntent {
+  readonly fire?: number;
+  readonly move?: number;
+  readonly rematch?: boolean;
 }
 
 export interface Rooms {
-  readonly join: (socket: RealtimeSocket, roomId: RoomId) => JoinOutcome;
+  readonly join: (
+    socket: RealtimeSocket,
+    roomId: RoomId,
+    kind: RoomKind
+  ) => JoinOutcome;
   readonly leave: (socket: RealtimeSocket) => Room | null;
-  readonly capture: (socket: RealtimeSocket, input: MovementInput) => boolean;
+  readonly capture: (
+    socket: RealtimeSocket,
+    input: MovementInput
+  ) => CaptureOutcome;
+  readonly captureDuel: (
+    socket: RealtimeSocket,
+    intent: DuelIntent
+  ) => CaptureOutcome;
   readonly advance: (ticks: number, deltaSeconds: number) => AdvancedRoom[];
   readonly get: (roomId: RoomId) => Room | undefined;
   readonly count: () => number;
@@ -70,6 +123,7 @@ export interface Rooms {
 
 export interface RoomsOptions {
   readonly tickRate: number;
+  /** Occupants of a lobby room. A duel always seats two. */
   readonly capacity: number;
   readonly ledgerDirectory: string | null;
   /**
@@ -82,10 +136,109 @@ export interface RoomsOptions {
   readonly maxRooms: number;
 }
 
+const DUEL_CAPACITY = 2;
+
+const disposeWorld = (room: Room): void => {
+  // Returns the world id to Koota's pool of 16. Without it a server stops
+  // being able to open rooms after the sixteenth, whatever else it releases.
+  if (room.kind === "duel") {
+    room.duel.dispose();
+  } else {
+    room.simulation.dispose();
+  }
+};
+
+const seat = (room: Room, clientId: ClientId): void => {
+  if (room.kind === "duel") {
+    room.duel.join(clientId);
+  } else {
+    room.simulation.spawnPlayer(clientId);
+  }
+};
+
+const unseat = (room: Room, clientId: ClientId): void => {
+  if (room.kind === "duel") {
+    room.duel.leave(clientId);
+  } else {
+    room.simulation.removePlayer(clientId);
+  }
+};
+
+const advanceLobby = (
+  room: LobbyRoom,
+  ticks: number,
+  deltaSeconds: number
+): AdvancedRoom => {
+  const frame = room.inputs.drain();
+  let players: readonly PlayerState<ClientId>[] = [];
+
+  for (let step = 0; step < ticks; step += 1) {
+    // Intent applies at the first boundary of a catch-up run. The Movement
+    // trait holds its value, so later steps continue in the same direction
+    // rather than consuming the frame a second time.
+    if (step === 0) {
+      for (const entry of frame) {
+        room.simulation.applyInput(entry.clientId, entry.input);
+      }
+    }
+
+    room.simulation.step(deltaSeconds);
+    room.tick += 1;
+    players = room.simulation.snapshot();
+
+    room.ledger?.record({
+      inputs: step === 0 ? frame : [],
+      players,
+      tick: room.tick,
+      type: "tick",
+    });
+  }
+
+  return { kind: "lobby", players, room };
+};
+
+const advanceDuel = (
+  room: DuelRoom,
+  ticks: number,
+  deltaSeconds: number
+): AdvancedRoom => {
+  const frame = room.inputs.drain();
+  let snapshot: DuelSnapshot = room.duel.snapshot();
+
+  for (let step = 0; step < ticks; step += 1) {
+    if (step === 0) {
+      for (const entry of frame) {
+        if (entry.move !== null) {
+          room.duel.move(entry.clientId, entry.move);
+        }
+        if (entry.fire !== null) {
+          room.duel.fire(entry.clientId, entry.fire);
+        }
+        if (entry.rematch) {
+          room.duel.rematch(entry.clientId);
+        }
+      }
+    }
+
+    room.duel.step(deltaSeconds);
+    room.tick += 1;
+    snapshot = room.duel.snapshot();
+
+    room.ledger?.record({
+      inputs: step === 0 ? frame : [],
+      snapshot,
+      tick: room.tick,
+      type: "duel.tick",
+    });
+  }
+
+  return { kind: "duel", room, snapshot };
+};
+
 export const createRooms = (options: RoomsOptions): Rooms => {
   const rooms = new Map<RoomId, Room>();
 
-  const create = (roomId: RoomId): Room => {
+  const create = (roomId: RoomId, kind: RoomKind): Room => {
     const startedAt = Date.now();
     const ledger =
       options.ledgerDirectory === null
@@ -94,6 +247,7 @@ export const createRooms = (options: RoomsOptions): Rooms => {
 
     ledger?.record({
       format: LEDGER_FORMAT,
+      kind,
       protocol: PROTOCOL_VERSION,
       roomId,
       startedAt,
@@ -101,26 +255,41 @@ export const createRooms = (options: RoomsOptions): Rooms => {
       type: "ledger.header",
     });
 
-    return {
-      capacity: options.capacity,
+    const base = {
       id: roomId,
-      inputs: createInputBuffer<ClientId>(),
       ledger,
-      simulation: createSimulation<ClientId>(),
       sockets: new Set<RealtimeSocket>(),
       tick: 0,
     };
+
+    return kind === "duel"
+      ? {
+          ...base,
+          capacity: DUEL_CAPACITY,
+          duel: createDuelSimulation<ClientId>(),
+          inputs: createDuelInputBuffer<ClientId>(),
+          kind: "duel",
+        }
+      : {
+          ...base,
+          capacity: options.capacity,
+          inputs: createInputBuffer<ClientId>(),
+          kind: "lobby",
+          simulation: createSimulation<ClientId>(),
+        };
   };
 
   const destroy = (room: Room): void => {
     rooms.delete(room.id);
     void room.ledger?.close();
-    // Returns the world id to Koota's pool of 16. Without it a server stops
-    // being able to open rooms after the sixteenth, whatever else it releases.
-    room.simulation.dispose();
+    disposeWorld(room);
   };
 
-  const join = (socket: RealtimeSocket, roomId: RoomId): JoinOutcome => {
+  const join = (
+    socket: RealtimeSocket,
+    roomId: RoomId,
+    kind: RoomKind
+  ): JoinOutcome => {
     if (socket.data.roomId !== null) {
       // Never a silent move: an unnoticed rejoin is a client bug that would
       // otherwise present as a world quietly changing underneath the player.
@@ -132,7 +301,9 @@ export const createRooms = (options: RoomsOptions): Rooms => {
       return { kind: "rejected", reason: "server_full" };
     }
 
-    const room = existing ?? create(roomId);
+    // An existing room keeps the rules it was created with, whatever a later
+    // joiner believes them to be.
+    const room = existing ?? create(roomId, kind);
     if (room.sockets.size >= room.capacity) {
       if (existing === undefined) {
         destroy(room);
@@ -142,7 +313,7 @@ export const createRooms = (options: RoomsOptions): Rooms => {
 
     rooms.set(roomId, room);
     room.sockets.add(socket);
-    room.simulation.spawnPlayer(socket.data.clientId);
+    seat(room, socket.data.clientId);
     room.ledger?.record({
       clientId: socket.data.clientId,
       type: "session.opened",
@@ -168,7 +339,7 @@ export const createRooms = (options: RoomsOptions): Rooms => {
     }
 
     room.sockets.delete(socket);
-    room.simulation.removePlayer(socket.data.clientId);
+    unseat(room, socket.data.clientId);
     room.ledger?.record({
       clientId: socket.data.clientId,
       type: "session.closed",
@@ -183,53 +354,61 @@ export const createRooms = (options: RoomsOptions): Rooms => {
     return room;
   };
 
-  const capture = (socket: RealtimeSocket, input: MovementInput): boolean => {
+  const roomOf = (socket: RealtimeSocket): Room | null => {
     const { roomId } = socket.data;
-    if (roomId === null) {
-      return false;
-    }
-    rooms.get(roomId)?.inputs.capture(socket.data.clientId, input);
-    return true;
+    return roomId === null ? null : (rooms.get(roomId) ?? null);
   };
 
-  const advance = (ticks: number, deltaSeconds: number): AdvancedRoom[] => {
-    const advanced: AdvancedRoom[] = [];
-
-    for (const room of rooms.values()) {
-      const frame = room.inputs.drain();
-      let players: readonly PlayerState<ClientId>[] = [];
-
-      for (let step = 0; step < ticks; step += 1) {
-        // Intent applies at the first boundary of a catch-up run. The Movement
-        // trait holds its value, so later steps continue in the same direction
-        // rather than consuming the frame a second time.
-        if (step === 0) {
-          for (const entry of frame) {
-            room.simulation.applyInput(entry.clientId, entry.input);
-          }
-        }
-
-        room.simulation.step(deltaSeconds);
-        room.tick += 1;
-        players = room.simulation.snapshot();
-
-        room.ledger?.record({
-          inputs: step === 0 ? frame : [],
-          players,
-          tick: room.tick,
-          type: "tick",
-        });
-      }
-
-      advanced.push({ players, room });
+  const capture = (
+    socket: RealtimeSocket,
+    input: MovementInput
+  ): CaptureOutcome => {
+    const room = roomOf(socket);
+    if (room === null) {
+      return "not_in_room";
     }
-
-    return advanced;
+    if (room.kind !== "lobby") {
+      return "wrong_room_kind";
+    }
+    room.inputs.capture(socket.data.clientId, input);
+    return "captured";
   };
+
+  const captureDuel = (
+    socket: RealtimeSocket,
+    intent: DuelIntent
+  ): CaptureOutcome => {
+    const room = roomOf(socket);
+    if (room === null) {
+      return "not_in_room";
+    }
+    if (room.kind !== "duel") {
+      return "wrong_room_kind";
+    }
+    const { clientId } = socket.data;
+    if (intent.move !== undefined) {
+      room.inputs.move(clientId, intent.move);
+    }
+    if (intent.fire !== undefined) {
+      room.inputs.fire(clientId, intent.fire);
+    }
+    if (intent.rematch === true) {
+      room.inputs.rematch(clientId);
+    }
+    return "captured";
+  };
+
+  const advance = (ticks: number, deltaSeconds: number): AdvancedRoom[] =>
+    [...rooms.values()].map((room) =>
+      room.kind === "duel"
+        ? advanceDuel(room, ticks, deltaSeconds)
+        : advanceLobby(room, ticks, deltaSeconds)
+    );
 
   return {
     advance,
     capture,
+    captureDuel,
     count: () => rooms.size,
     disposeAll: async () => {
       const closing = [...rooms.values()].map(
@@ -237,7 +416,7 @@ export const createRooms = (options: RoomsOptions): Rooms => {
       );
       for (const room of rooms.values()) {
         rooms.delete(room.id);
-        room.simulation.dispose();
+        disposeWorld(room);
       }
       await Promise.all(closing);
     },

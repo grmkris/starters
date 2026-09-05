@@ -1,5 +1,10 @@
 import { PROTOCOL_VERSION } from "@agent-native/domain";
-import type { ClientId, ResumeToken, RoomId } from "@agent-native/domain";
+import type {
+  ClientId,
+  ResumeToken,
+  RoomCode,
+  RoomId,
+} from "@agent-native/domain";
 import {
   decodeServerMessage,
   encodeClientMessage,
@@ -35,9 +40,18 @@ const isType = <Type extends ServerMessage["type"]>(
   type: Type
 ): message is OfType<Type> => message.type === type;
 
+/** A client message without its sequence number; `say` stamps one. */
+type ClientMessageBody = ClientMessage extends infer Message
+  ? Message extends ClientMessage
+    ? Omit<Message, "seq">
+    : never
+  : never;
+
 export interface TestClient {
   readonly received: readonly ServerMessage[];
   readonly send: (message: ClientMessage) => void;
+  /** Sends with the next sequence number, for tests that do not care about it. */
+  readonly say: (body: ClientMessageBody) => void;
   /** First message of `type` satisfying `matches`, counting from the last hit. */
   readonly until: <Type extends ServerMessage["type"]>(
     type: Type,
@@ -59,6 +73,13 @@ interface JoinedClient {
   readonly resumeToken: ResumeToken;
 }
 
+interface DuelClient {
+  readonly client: TestClient;
+  readonly clientId: ClientId;
+  readonly code: RoomCode;
+  readonly roomId: RoomId;
+}
+
 export interface Harness {
   readonly url: string;
   readonly port: number;
@@ -66,6 +87,10 @@ export interface Harness {
   readonly connect: () => Promise<TestClient>;
   /** Connects, waits for identity, joins `roomId`, waits for the acknowledgement. */
   readonly join: (roomId: RoomId) => Promise<JoinedClient>;
+  /** Connects, creates a duel, and joins it as the first player. */
+  readonly createDuel: () => Promise<DuelClient>;
+  /** Connects, resolves `code`, and joins the duel it names. */
+  readonly joinDuel: (code: RoomCode) => Promise<DuelClient>;
   readonly close: () => Promise<void>;
 }
 
@@ -191,11 +216,17 @@ const connectClient = async (url: string): Promise<TestClient> => {
     await closed;
   };
 
+  let sequence = 0;
+
   return {
     close,
     closed,
     next: async (type, timeoutMs) => await until(type, () => true, timeoutMs),
     received,
+    say: (body) => {
+      sequence += 1;
+      socket.send(encodeClientMessage({ ...body, seq: sequence }));
+    },
     send: (message) => {
       socket.send(encodeClientMessage(message));
     },
@@ -249,6 +280,37 @@ export const startHarness = ({
         clientId: joined.clientId,
         resumeToken: welcome.resumeToken,
       };
+    },
+    createDuel: async () => {
+      const client = await connectClient(`ws://127.0.0.1:${port}/realtime`);
+      await client.next("session.welcome");
+      client.say({ type: "duel.create", v: PROTOCOL_VERSION });
+      const created = await client.next("duel.created");
+      client.say({
+        roomId: created.roomId,
+        type: "room.join",
+        v: PROTOCOL_VERSION,
+      });
+      const joined = await client.next("room.joined");
+      return {
+        client,
+        clientId: joined.clientId,
+        code: created.code,
+        roomId: created.roomId,
+      };
+    },
+    joinDuel: async (code) => {
+      const client = await connectClient(`ws://127.0.0.1:${port}/realtime`);
+      await client.next("session.welcome");
+      client.say({ code, type: "duel.join", v: PROTOCOL_VERSION });
+      const found = await client.next("duel.found");
+      client.say({
+        roomId: found.roomId,
+        type: "room.join",
+        v: PROTOCOL_VERSION,
+      });
+      const joined = await client.next("room.joined");
+      return { client, clientId: joined.clientId, code, roomId: found.roomId };
     },
     port,
     resource,

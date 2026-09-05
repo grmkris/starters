@@ -56,6 +56,106 @@ export type ResumeToken = typeof ResumeToken.Type;
 
 const decodeResumeToken = Schema.decodeUnknownSync(ResumeToken);
 
+// ---------------------------------------------------------------------------
+// Duel
+// ---------------------------------------------------------------------------
+
+/** Which lane a duelist holds: `-1` is x < 0, `1` is x > 0. */
+export const Side = Schema.Literals([-1, 1]);
+
+export type Side = typeof Side.Type;
+
+export const DuelPhase = Schema.Literals([
+  "waiting",
+  "countdown",
+  "playing",
+  "roundOver",
+  "matchOver",
+]);
+
+export type DuelPhase = typeof DuelPhase.Type;
+
+/** Where along the lane the player wants to be. The server clamps it. */
+export const DuelMove = Schema.Struct({
+  target: Schema.Finite,
+});
+
+export type DuelMove = typeof DuelMove.Type;
+
+/** A shot across the seam, `angle` in radians from straight across. */
+export const DuelFire = Schema.Struct({
+  angle: Schema.Finite,
+});
+
+export type DuelFire = typeof DuelFire.Type;
+
+export const DuelPlayerSnapshot = Schema.Struct({
+  clientId: ClientId,
+  cooldown: Schema.Finite,
+  health: Schema.Int,
+  position: Vector3,
+  rematch: Schema.Boolean,
+  rounds: Schema.Int,
+  side: Side,
+});
+
+export type DuelPlayerSnapshot = typeof DuelPlayerSnapshot.Type;
+
+export const ProjectileSnapshot = Schema.Struct({
+  id: Schema.Int,
+  ownerId: ClientId,
+  position: Vector3,
+  velocity: Schema.Struct({ x: Schema.Finite, z: Schema.Finite }),
+});
+
+export type ProjectileSnapshot = typeof ProjectileSnapshot.Type;
+
+/**
+ * The whole of a duel at one tick. Kept as a field set so the wire message
+ * and the ledger record spread the same definition rather than each carrying
+ * a copy that can drift.
+ */
+export const DuelSnapshotFields = {
+  countdown: Schema.Finite,
+  phase: DuelPhase,
+  players: Schema.Array(DuelPlayerSnapshot),
+  projectiles: Schema.Array(ProjectileSnapshot),
+  round: Schema.Int,
+  winner: Schema.NullOr(Side),
+};
+
+export const DuelSnapshot = Schema.Struct(DuelSnapshotFields);
+
+export type DuelSnapshot = typeof DuelSnapshot.Type;
+
+/**
+ * What one phone shows the other to join. Four characters from an alphabet
+ * without I, O, 0 and 1, which are the ones people misread when typing a code
+ * off somebody else's screen. Not a secret: it names a room for a minute.
+ */
+const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+export const RoomCode = Schema.String.pipe(
+  Schema.check(
+    Schema.isPattern(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/u, {
+      message: "Expected a 4-character room code",
+    })
+  ),
+  Schema.brand("RoomCode")
+);
+
+export type RoomCode = typeof RoomCode.Type;
+
+const decodeRoomCode = Schema.decodeUnknownSync(RoomCode);
+
+/** The alphabet has 32 entries and 256 is a multiple of 32, so a byte modulo 32 is uniform. */
+export const makeRoomCode = (): RoomCode => {
+  const bytes = crypto.getRandomValues(new Uint8Array(4));
+  return decodeRoomCode(
+    Array.from(bytes, (byte) => ROOM_CODE_ALPHABET[byte % 32] ?? "A").join("")
+  );
+};
+
 /** The only place a resume token is minted. 128 bits from the CSPRNG. */
 export const makeResumeToken = (): ResumeToken => {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
