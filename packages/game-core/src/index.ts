@@ -75,10 +75,17 @@ export const createSimulation = <
     input: { readonly x: number; readonly z: number }
   ): void => {
     const entity = players.get(clientId);
-    entity?.set(Movement, {
-      x: Math.max(-1, Math.min(1, input.x)),
-      z: Math.max(-1, Math.min(1, input.z)),
-    });
+    if (!entity) {
+      return;
+    }
+    // Bounded by magnitude, not per axis, so `MAX_SPEED` is the speed in every
+    // direction. Clamping each axis to the unit range let W+D travel √2 times
+    // faster than W alone, and a control that reports a unit circle - the
+    // thumbstick - could never match it. A vector inside the circle is an
+    // analogue stick's partial deflection and passes through unchanged.
+    const magnitude = Math.hypot(input.x, input.z);
+    const scale = magnitude > 1 ? 1 / magnitude : 1;
+    entity.set(Movement, { x: input.x * scale, z: input.z * scale });
   };
 
   const step = (deltaSeconds: number): void => {

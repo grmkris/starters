@@ -17,6 +17,24 @@ describe("authoritative simulation", () => {
     ]);
   });
 
+  test("caps diagonal input at full speed rather than per axis", () => {
+    const simulation = createSimulation();
+    simulation.spawnPlayer("player-1");
+    // W and D together: the keyboard's diagonal.
+    simulation.applyInput("player-1", { x: 1, z: 1 });
+    simulation.step(1);
+
+    const [player] = simulation.snapshot();
+    const travelled = Math.hypot(
+      player?.position.x ?? 0,
+      player?.position.z ?? 0
+    );
+    // Clamping each axis to the unit range let a diagonal travel √2 times
+    // further per second than a straight line, and the thumbstick, which
+    // clamps to the unit circle, could never match it.
+    expect(travelled).toBeCloseTo(3.5, 6);
+  });
+
   test("orders the snapshot canonically rather than by arrival", () => {
     const simulation = createSimulation();
     simulation.spawnPlayer("player-c");
