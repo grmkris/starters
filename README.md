@@ -9,7 +9,7 @@ bun install
 bun dev
 ```
 
-Open `http://localhost:3000`. The Bun server listens on `http://localhost:3001`; its health endpoint is `/health` and its WebSocket endpoint is `/realtime`. Open two browser tabs to see two server-owned Koota entities. Move the focused tab with WASD.
+Open `http://localhost:3000`. The Bun server listens on `http://localhost:3001`; its health endpoint is `/health` and its WebSocket endpoint is `/realtime`. Open two browser tabs to see two server-owned Koota entities. Move the focused tab with WASD. Reload a tab and it keeps its identity: the server holds a dropped identity for a minute, and the tab presents its claim on the way back in.
 
 The browser talks to the socket on its own origin, and the dev server proxies `/realtime` to the Bun process, so the page works unchanged from another device on the network — open the same URL on a phone and it connects without configuration. Set `WEB_PORT` to run a second worktree alongside the first.
 

@@ -60,3 +60,23 @@ test("keeps compact navigation readable", async ({ page }) => {
   }));
   expect(dimensions.scrollWidth).toBe(dimensions.clientWidth);
 });
+
+test("keeps its identity across a reload", async ({ browser, page }) => {
+  await page.goto("/");
+  const client = page.getByTestId("client-id");
+  await expect(client).toHaveAttribute("data-client-id", /^cli_/u);
+  const before = await client.getAttribute("data-client-id");
+
+  await page.reload();
+  await expect(client).toHaveAttribute("data-client-id", /^cli_/u);
+  expect(await client.getAttribute("data-client-id")).toBe(before);
+
+  // Identity is per tab, so a second one is a second player rather than a
+  // takeover of the first.
+  const other = await browser.newPage();
+  await other.goto("/");
+  const otherClient = other.getByTestId("client-id");
+  await expect(otherClient).toHaveAttribute("data-client-id", /^cli_/u);
+  expect(await otherClient.getAttribute("data-client-id")).not.toBe(before);
+  await other.close();
+});

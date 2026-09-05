@@ -1,4 +1,7 @@
-import { decodeServerMessage } from "@agent-native/protocol";
+import {
+  decodeServerMessage,
+  SUPERSEDED_CLOSE_CODE,
+} from "@agent-native/protocol";
 import { Effect, Result, Schedule, Schema } from "effect";
 import { Machine } from "effect-machine";
 
@@ -79,7 +82,14 @@ const connectAttempt = Effect.fn("connectAttempt")(
 
               socket.addEventListener(
                 "close",
-                () => {
+                (event) => {
+                  if (event.code === SUPERSEDED_CLOSE_CODE) {
+                    // Another connection holds this identity now, most likely
+                    // a tab that copied this one's storage. Presenting the
+                    // same claim again would take it back and start a tug of
+                    // war between the two.
+                    store.forgetIdentity();
+                  }
                   machine.send(
                     ConnectionEvent.SocketClosed({ at: Date.now() })
                   );

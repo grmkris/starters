@@ -17,15 +17,17 @@ const Envelope = {
  * Presented on `room.join` to reclaim a `ClientId` after a reconnect. The pair
  * must match what the server issued; either half alone proves nothing.
  */
-const Resume = Schema.Struct({
+export const ResumeClaim = Schema.Struct({
   clientId: ClientId,
   resumeToken: ResumeToken,
 });
 
+export type ResumeClaim = typeof ResumeClaim.Type;
+
 const ClientMessage = Schema.Union([
   Schema.Struct({
     ...Envelope,
-    resume: Schema.optional(Resume),
+    resume: Schema.optional(ResumeClaim),
     roomId: RoomId,
     type: Schema.Literals(["room.join"]),
   }),

@@ -131,7 +131,11 @@ export const RuntimePage = () => {
               <dt className="text-muted-foreground font-mono text-[0.65rem] tracking-wider">
                 CLIENT
               </dt>
-              <dd className="mt-1 font-mono">
+              <dd
+                className="mt-1 font-mono"
+                data-client-id={meta.clientId ?? ""}
+                data-testid="client-id"
+              >
                 {formatClientId(meta.clientId)}
               </dd>
             </div>
