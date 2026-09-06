@@ -33,6 +33,14 @@ Each room writes one file per server run, named by its room id and start time, a
 
 `check` runs Oxfmt, type-aware Oxlint/anti-slop, strict TypeScript, architecture boundaries, agent-skill validation, Bun tests, and Knip. Foundry and Playwright remain explicit gates because they own separate native toolchains. CI runs all three layers on every pull request and main-branch push.
 
+## Play the duel
+
+Open `/duel` on two phones held upright and put them side by side. One taps **New duel** and shows a four-letter code and a QR; the other types the code or scans it. The left phone is the left lane, the right phone the right, and the green line on each screen's edge is the seam between them.
+
+The whole screen is the control: hold and drag to slide along your lane, tap to shoot straight across the seam, flick toward the seam to shoot at an angle. A steep shot banks once off the wall. Three hits take a round, two rounds the match. Alone, **Play the bot**; with strangers, **Play anyone** pairs you with whoever is waiting and offers the bot after fifteen seconds.
+
+Replace the hover tank with your own model: `docs/duel-models.md` is the contract. `docs/decisions/0007-duel-rendering.md` records why the lane is drawn the way it is.
+
 ## Deploy it
 
 One container is a deployment. The Dockerfile builds the page and starts the server, which serves `apps/web/dist` on the same origin as `/realtime` and `/health`, so the client needs no configuration. `railway.json` selects the Dockerfile and points Railway's health check at `/health`.
@@ -56,7 +64,7 @@ The server keeps rooms and resume claims in memory, so every deploy starts them 
 - `packages/chain` — viem inside Effect services and address validation.
 - `packages/database` — scoped Postgres service and Drizzle schema.
 - `packages/contracts` — Foundry contracts and tests.
-- `.agents/skills` — five narrow, repository-specific decision guides.
+- `.agents/skills` — repository decision guides, Blender/image asset workflows, and focused R3F references; `kit-game` routes scene work and `kit-assets` routes asset work.
 - `e2e` — Chromium smoke coverage for runtime, routes, console errors, and compact layout.
 
 Read `docs/research/assessment.md` for the deep analysis of the original research and `docs/architecture.md` for the maintained package contract.
