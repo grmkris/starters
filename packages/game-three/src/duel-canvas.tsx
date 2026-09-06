@@ -8,6 +8,7 @@ import { Muzzle } from "./effects/muzzle";
 import { Seam } from "./effects/seam";
 import { Shots } from "./effects/shots";
 import { Sparks } from "./effects/sparks";
+import { fitLane } from "./lane-fit";
 import type { ModelState } from "./model-slot";
 import { Tank } from "./models/tank";
 import { ObliqueGroup } from "./oblique-group";
@@ -100,14 +101,19 @@ const Lane = ({
   side,
   source,
 }: LaneProps) => {
-  // Portrait fits the lane's width to the screen's width, so the seam sits
-  // on the side edge; landscape fits the same width to the screen's height,
-  // so the seam sits on the bottom or top edge. Fitting the long axis instead
-  // would push the seam off the screen wherever a header takes some height.
   const { height, width } = useThree((state) => state.size);
   const laneWidth = field.halfWidth;
   const laneHeight = field.laneHalfHeight * 2;
   const centreX = (side * laneWidth) / 2;
+  // The lane runs down the screen in portrait and across it in landscape;
+  // `lane-fit` says how it sits on the screen and where the camera looks.
+  const { cameraX, zoom } = fitLane(
+    layout === "portrait"
+      ? { across: width, along: height }
+      : { across: height, along: width },
+    { length: laneHeight, width: laneWidth },
+    side
+  );
 
   const accessors = useMemo(
     () => ({
@@ -128,12 +134,12 @@ const Lane = ({
         key={layout}
         makeDefault
         onUpdate={(camera) => {
-          camera.lookAt(centreX, 0, 0);
+          camera.lookAt(cameraX, 0, 0);
           camera.updateProjectionMatrix();
         }}
-        position={[centreX, 20, 0]}
+        position={[cameraX, 20, 0]}
         up={layout === "portrait" ? [0, 0, -1] : [-1, 0, 0]}
-        zoom={layout === "portrait" ? width / laneWidth : height / laneWidth}
+        zoom={zoom}
       />
       <color attach="background" args={[palette.background]} />
       <ambientLight intensity={0.6} />
