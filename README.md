@@ -45,7 +45,7 @@ Replace the hover tank with your own model: `docs/duel-models.md` is the contrac
 
 ## Deploy it
 
-One container is a deployment. The Dockerfile builds the page and starts the server, which serves `apps/web/dist` on the same origin as `/realtime` and `/health`, so the client needs no configuration. `railway.json` selects the Dockerfile and points Railway's health check at `/health`.
+One container is a deployment. The Dockerfile builds the page and starts the server, which serves `apps/web/dist` on the same origin as `/realtime` and `/health`, so the client needs no configuration. The Railway service is set to build from the Dockerfile, check `/health`, and deploy `main` on every push; `railway up` ships the working tree by hand.
 
 ```bash
 docker build -t field01 . && docker run --rm -p 3001:3001 field01   # try the image locally
