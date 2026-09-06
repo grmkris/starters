@@ -8,6 +8,7 @@ import { Muzzle } from "./effects/muzzle";
 import { Seam } from "./effects/seam";
 import { Shots } from "./effects/shots";
 import { Sparks } from "./effects/sparks";
+import type { ModelState } from "./model-slot";
 import { Tank } from "./models/tank";
 import { ObliqueGroup } from "./oblique-group";
 import type { WorldPalette } from "./world-canvas";
@@ -29,6 +30,11 @@ import type { WorldPalette } from "./world-canvas";
 export interface DuelField {
   readonly halfWidth: number;
   readonly laneHalfHeight: number;
+}
+
+/** URLs of glTF files to stand in for the procedural models, per slot. */
+export interface DuelModels {
+  readonly player?: string | undefined;
 }
 
 const FOLLOW_STIFFNESS = 18;
@@ -65,13 +71,23 @@ const SeamMarker = ({ clientId, palette, source }: SeamMarkerProps) => {
 
 interface LaneProps {
   readonly field: DuelField;
+  readonly models?: DuelModels | undefined;
+  readonly onModelState?: ((state: ModelState) => void) | undefined;
   readonly localClientId: string | null;
   readonly palette: WorldPalette;
   readonly side: -1 | 1;
   readonly source: DuelSource;
 }
 
-const Lane = ({ field, localClientId, palette, side, source }: LaneProps) => {
+const Lane = ({
+  field,
+  localClientId,
+  models,
+  onModelState,
+  palette,
+  side,
+  source,
+}: LaneProps) => {
   const { width } = useThree((state) => state.size);
   const laneWidth = field.halfWidth;
   const laneHeight = field.laneHalfHeight * 2;
@@ -136,6 +152,8 @@ const Lane = ({ field, localClientId, palette, side, source }: LaneProps) => {
               <Tank
                 clientId={clientId}
                 isLocal={isLocal}
+                model={models?.player}
+                onModelState={isLocal ? onModelState : undefined}
                 palette={palette}
                 side={duelist.side}
                 source={source}
@@ -173,6 +191,8 @@ const Lane = ({ field, localClientId, palette, side, source }: LaneProps) => {
 interface DuelCanvasProps {
   readonly className?: string;
   readonly field: DuelField;
+  readonly models?: DuelModels | undefined;
+  readonly onModelState?: ((state: ModelState) => void) | undefined;
   readonly localClientId: string | null;
   readonly palette: WorldPalette;
   readonly side: -1 | 1;
@@ -183,6 +203,8 @@ export const DuelCanvas = ({
   className,
   field,
   localClientId,
+  models,
+  onModelState,
   palette,
   side,
   source,
@@ -195,6 +217,8 @@ export const DuelCanvas = ({
       <Lane
         field={field}
         localClientId={localClientId}
+        models={models}
+        onModelState={onModelState}
         palette={palette}
         side={side}
         source={source}

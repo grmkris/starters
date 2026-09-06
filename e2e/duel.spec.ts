@@ -74,6 +74,15 @@ test("the bot turns up when asked", async ({ browser }) => {
   const context = await browser.newContext(phone);
   const page = await context.newPage();
   const feed = recordDuelSnapshots(page);
+  const browserErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      browserErrors.push(message.text());
+    }
+  });
+  page.on("pageerror", (error) => {
+    browserErrors.push(error.message);
+  });
 
   await page.goto(`${base}/duel`);
   await page.getByRole("button", { name: "Play the bot", exact: true }).click();
@@ -90,6 +99,36 @@ test("the bot turns up when asked", async ({ browser }) => {
       timeout: 5000,
     })
     .toBe(true);
+
+  // The stand-in model loaded into the slot, and nothing complained.
+  await expect(page.getByTestId("duel-root")).toHaveAttribute(
+    "data-model",
+    "loaded"
+  );
+  expect(browserErrors).toEqual([]);
+
+  await context.close();
+});
+
+test("without a model the procedural tank stands in", async ({ browser }) => {
+  const base = test.info().project.use.baseURL ?? "";
+  const context = await browser.newContext(phone);
+  const page = await context.newPage();
+
+  await page.goto(`${base}/duel`);
+  await page.getByRole("button", { name: "Play the bot", exact: true }).click();
+  await expect(page).toHaveURL(/\/duel\/[A-Z2-9]{4}$/u);
+  // Same room, models switched off.
+  await page.goto(`${page.url()}?models=off`);
+  await expect(page.getByTestId("duel-root")).toHaveAttribute(
+    "data-phase",
+    "playing",
+    { timeout: 15_000 }
+  );
+  await expect(page.getByTestId("duel-root")).toHaveAttribute(
+    "data-model",
+    "fallback"
+  );
 
   await context.close();
 });

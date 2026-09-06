@@ -2,10 +2,7 @@
   "name": "agent-native-starter",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "workspaces": ["apps/*", "packages/*"],
   "type": "module",
   "scripts": {
     "dev": "turbo run dev --parallel",
@@ -27,6 +24,7 @@
     "knip": "knip",
     "graph": "bun tools/check-graph.ts",
     "icons": "bun tools/icons.ts",
+    "models:fixture": "bun tools/glb.ts",
     "agents:check": "bun tools/check-agent-files.ts",
     "hooks:install": "lefthook install",
     "fix": "ultracite fix"

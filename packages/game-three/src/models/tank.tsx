@@ -1,8 +1,10 @@
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
-import type { Group, MeshStandardMaterial } from "three";
+import type { Group } from "three";
 
 import type { DuelSource } from "../duel-source";
+import { ModelSlot } from "../model-slot";
+import type { ModelState } from "../model-slot";
 import type { WorldPalette } from "../world-canvas";
 
 /**
@@ -20,6 +22,9 @@ import type { WorldPalette } from "../world-canvas";
 interface TankProps {
   readonly clientId: string;
   readonly isLocal: boolean;
+  /** A glTF to stand in for the procedural body, if there is one. */
+  readonly model?: string | undefined;
+  readonly onModelState?: ((state: ModelState) => void) | undefined;
   readonly palette: WorldPalette;
   readonly side: -1 | 1;
   readonly source: DuelSource;
@@ -36,13 +41,14 @@ const FLASH_SECONDS = 0.25;
 export const Tank = ({
   clientId,
   isLocal,
+  model,
+  onModelState,
   palette,
   side,
   source,
 }: TankProps) => {
   const root = useRef<Group>(null);
   const hull = useRef<Group>(null);
-  const body = useRef<MeshStandardMaterial>(null);
   const previousZ = useRef<number | null>(null);
   const recoil = useRef(0);
   const flash = useRef(0);
@@ -87,9 +93,10 @@ export const Tank = ({
     flash.current = Math.max(0, flash.current - delta / FLASH_SECONDS);
     if (hull.current) {
       hull.current.position.x = -RECOIL_DISTANCE * recoil.current;
-    }
-    if (body.current) {
-      body.current.emissiveIntensity = 0.35 + 1.6 * flash.current;
+      // The flash is a swell rather than a material change, so a loaded model
+      // flashes exactly as the procedural one does.
+      const swell = 1 + 0.18 * flash.current;
+      hull.current.scale.set(swell, swell, swell);
     }
   });
 
@@ -99,40 +106,53 @@ export const Tank = ({
   return (
     <group ref={root} rotation={[0, side === 1 ? Math.PI : 0, 0]}>
       <group ref={hull}>
-        {/* Hull: a three-sided prism, one vertex forward. */}
-        <mesh position={[0, 0.12, 0]} rotation={[0, Math.PI / 6, 0]}>
-          <cylinderGeometry args={[0.44, 0.48, 0.24, 3]} />
-          <meshStandardMaterial
-            color={colour}
-            emissive={glow}
-            emissiveIntensity={0.35}
-            flatShading
-            metalness={0.25}
-            ref={body}
-            roughness={0.5}
-          />
-        </mesh>
-        {/* Turret and barrel. */}
-        <mesh position={[0, 0.3, 0]}>
-          <cylinderGeometry args={[0.15, 0.17, 0.14, 8]} />
-          <meshStandardMaterial
-            color={colour}
-            flatShading
-            metalness={0.3}
-            roughness={0.45}
-          />
-        </mesh>
-        <mesh position={[0.3, 0.3, 0]}>
-          <boxGeometry args={[0.4, 0.06, 0.06]} />
-          <meshStandardMaterial color={colour} flatShading roughness={0.4} />
-        </mesh>
-        {/* Thrusters, lit in the player's colour. */}
-        {[-0.18, 0.18].map((z) => (
-          <mesh key={z} position={[-0.32, 0.1, z]}>
-            <boxGeometry args={[0.14, 0.1, 0.12]} />
-            <meshBasicMaterial color={colour} toneMapped={false} />
-          </mesh>
-        ))}
+        <ModelSlot
+          colour={colour}
+          fallback={
+            <>
+              {/* Hull: a three-sided prism, one vertex forward. */}
+              <mesh position={[0, 0.12, 0]} rotation={[0, Math.PI / 6, 0]}>
+                <cylinderGeometry args={[0.44, 0.48, 0.24, 3]} />
+                <meshStandardMaterial
+                  color={colour}
+                  emissive={glow}
+                  emissiveIntensity={0.35}
+                  flatShading
+                  metalness={0.25}
+                  roughness={0.5}
+                />
+              </mesh>
+              {/* Turret and barrel. */}
+              <mesh position={[0, 0.3, 0]}>
+                <cylinderGeometry args={[0.15, 0.17, 0.14, 8]} />
+                <meshStandardMaterial
+                  color={colour}
+                  flatShading
+                  metalness={0.3}
+                  roughness={0.45}
+                />
+              </mesh>
+              <mesh position={[0.3, 0.3, 0]}>
+                <boxGeometry args={[0.4, 0.06, 0.06]} />
+                <meshStandardMaterial
+                  color={colour}
+                  flatShading
+                  roughness={0.4}
+                />
+              </mesh>
+              {/* Thrusters, lit in the player's colour. */}
+              {[-0.18, 0.18].map((z) => (
+                <mesh key={z} position={[-0.32, 0.1, z]}>
+                  <boxGeometry args={[0.14, 0.1, 0.12]} />
+                  <meshBasicMaterial color={colour} toneMapped={false} />
+                </mesh>
+              ))}
+            </>
+          }
+          glow={glow}
+          onState={onModelState}
+          url={model}
+        />
       </group>
     </group>
   );

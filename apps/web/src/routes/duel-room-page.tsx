@@ -1,6 +1,7 @@
 import { DUEL_FIELD, RoomCode } from "@agent-native/domain";
 import type { DuelPlayerSnapshot, Side } from "@agent-native/domain";
 import { DuelCanvas } from "@agent-native/game-three";
+import type { ModelState } from "@agent-native/game-three";
 import { Button } from "@agent-native/ui/components/button";
 import { cn } from "@agent-native/ui/lib/utils";
 import { Link, useParams } from "@tanstack/react-router";
@@ -29,6 +30,15 @@ const FIELD = {
   halfWidth: DUEL_FIELD.halfWidth,
   laneHalfHeight: DUEL_FIELD.laneHalfHeight,
 };
+
+/**
+ * Where the models live. `?models=off` keeps the procedural bodies, which is
+ * how the two are compared and how the fallback path is tested.
+ */
+const MODELS = { player: "/models/player.glb" };
+
+const modelsWanted = (): boolean =>
+  new URLSearchParams(window.location.search).get("models") !== "off";
 
 interface HealthPipsProps {
   readonly health: number;
@@ -253,6 +263,8 @@ export const DuelRoomPage = () => {
     realtimeStore.getDuelSnapshot
   );
   const surface = useRef<HTMLDivElement>(null);
+  const [modelState, setModelState] = useState<ModelState | null>(null);
+  const models = useMemo(() => (modelsWanted() ? MODELS : undefined), []);
 
   const parsed = decodeCode(code ?? "");
   const validCode = Result.isSuccess(parsed) ? parsed.success : null;
@@ -310,6 +322,7 @@ export const DuelRoomPage = () => {
   return (
     <main
       className="relative h-[calc(100dvh-4rem)] w-full overflow-hidden"
+      data-model={modelState ?? "pending"}
       data-phase={duel.phase ?? "joining"}
       data-testid="duel-root"
     >
@@ -318,6 +331,8 @@ export const DuelRoomPage = () => {
           className="absolute inset-0"
           field={FIELD}
           localClientId={meta.clientId}
+          models={models}
+          onModelState={setModelState}
           palette={palette}
           side={side}
           source={realtimeStore}
