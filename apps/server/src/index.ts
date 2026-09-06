@@ -7,11 +7,22 @@ import {
 } from "@agent-native/protocol";
 import type { ClientMessage, ServerMessageBody } from "@agent-native/protocol";
 import { BunRuntime } from "@effect/platform-bun";
-import { Config, Context, Effect, Layer, Option, Result } from "effect";
+import {
+  Config,
+  Context,
+  Effect,
+  Layer,
+  Option,
+  Redacted,
+  Result,
+} from "effect";
 
 import { startBot } from "./bot";
 import type { Bot } from "./bot";
 import { createRoomCodes } from "./codes";
+import { createDinoRaceApi } from "./dinorace/api";
+import type { DinoRaceApi } from "./dinorace/api";
+import { repositoryRoot } from "./dinorace/worker";
 import { createQueue } from "./queue";
 import { createResumeRegistry } from "./resume";
 import { createRooms } from "./rooms";
@@ -55,6 +66,7 @@ export interface ServerOptions {
    * in development, where Vite serves the page and proxies the socket here.
    */
   readonly site: StaticSite | null;
+  readonly dinoRaceApi?: DinoRaceApi | undefined;
 }
 
 export interface ServerResource {
@@ -88,6 +100,7 @@ const send = (socket: RealtimeSocket, body: ServerMessageBody): void => {
  * `resource.server.port`.
  */
 export const createRealtimeServer = ({
+  dinoRaceApi,
   idleTimeoutSeconds,
   ledgerDirectory,
   port,
@@ -278,6 +291,15 @@ export const createRealtimeServer = ({
   const server = Bun.serve<SocketData>({
     async fetch(request, bunServer) {
       const url = new URL(request.url);
+
+      if (url.pathname.startsWith("/api/dinorace/")) {
+        return dinoRaceApi
+          ? await dinoRaceApi.respond(request)
+          : Response.json(
+              { version: 1, error: "DinoRace operator API is disabled" },
+              { status: 503 }
+            );
+      }
 
       if (url.pathname === "/health") {
         return Response.json(
@@ -544,9 +566,38 @@ class RealtimeServer extends Context.Service<
       const site = yield* Effect.promise(
         async () => await createStaticSite(webDirectory)
       );
+      const workerToken = yield* Config.redacted("DINORACE_WORKER_TOKEN").pipe(
+        Config.option
+      );
+      const blender = yield* Config.string("BLENDER_BIN").pipe(
+        Config.withDefault("blender")
+      );
+      const jobRoot = yield* Config.string("DINORACE_JOB_ROOT").pipe(
+        Config.withDefault(`${repositoryRoot}/.dinorace`)
+      );
+      const dinoRaceApi = Option.isSome(workerToken)
+        ? yield* Effect.acquireRelease(
+            Effect.sync(() =>
+              createDinoRaceApi(
+                {
+                  root: jobRoot,
+                  blender,
+                  renderDevice: "cpu",
+                  timeoutSeconds: 600,
+                },
+                Redacted.value(workerToken.value)
+              )
+            ),
+            (api) =>
+              Effect.promise(async () => {
+                await api.dispose();
+              })
+          )
+        : undefined;
       const resource = yield* Effect.acquireRelease(
         Effect.sync(() =>
           createRealtimeServer({
+            dinoRaceApi,
             idleTimeoutSeconds: IDLE_TIMEOUT_SECONDS,
             ledgerDirectory: Option.getOrNull(ledgerDirectory),
             port,

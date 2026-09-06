@@ -1,14 +1,14 @@
 import { Badge } from "@agent-native/ui/components/badge";
 import { buttonVariants } from "@agent-native/ui/components/button";
 import { cn } from "@agent-native/ui/lib/utils";
-import { Link, Outlet } from "@tanstack/react-router";
+import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 
 import { useRealtimeConnection } from "../hooks/use-realtime-connection";
 import { WalletControl } from "./wallet-control";
 
 const navClassName = cn(buttonVariants({ size: "sm", variant: "ghost" }));
 
-export const AppShell = () => {
+const RuntimeShell = () => {
   useRealtimeConnection();
 
   return (
@@ -39,6 +39,12 @@ export const AppShell = () => {
               Architecture
             </Link>
             <Link
+              className={cn(navClassName, "hidden md:inline-flex")}
+              to="/dinorace"
+            >
+              DinoRace
+            </Link>
+            <Link
               activeProps={{ "data-status": "active" }}
               className={navClassName}
               to="/duel"
@@ -55,4 +61,11 @@ export const AppShell = () => {
       <Outlet />
     </div>
   );
+};
+
+export const AppShell = () => {
+  const immersive = useRouterState({
+    select: (state) => state.location.pathname === "/dinorace",
+  });
+  return immersive ? <Outlet /> : <RuntimeShell />;
 };

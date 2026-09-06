@@ -805,3 +805,555 @@ button:not(:disabled),
     animation: scanline 9s linear infinite;
   }
 }
+
+/* DinoRace uses a route-scoped instrument palette; renderer colors resolve here. */
+:root {
+  --dino-void: #09121b;
+  --dino-cool: #c1eaff;
+  --dino-warm: #ffc48b;
+  --dino-paint: #ec4d27;
+}
+.dinorace {
+  --background: #09121b;
+  --foreground: #e2e9eb;
+  --primary: #ef542d;
+  --primary-foreground: #fff6f0;
+  --muted: #1a2b37;
+  --muted-foreground: #96acb8;
+  --border: #47616b66;
+  --ring: #b1e1ef;
+  --radius: 0;
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.dino-viewport {
+  position: absolute;
+  inset: 0;
+}
+.dino-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 28px 38px;
+  pointer-events: none;
+  background: linear-gradient(#08121bd9, transparent);
+}
+.dino-wordmark {
+  font-size: 26px;
+  letter-spacing: -0.12em;
+  font-weight: 600;
+  pointer-events: auto;
+}
+.dino-wordmark span {
+  color: var(--primary);
+  margin: 0 7px;
+}
+.dino-project {
+  padding-left: 24px;
+  border-left: 1px solid var(--border);
+}
+.dino-project h1 {
+  font-size: 14px;
+  letter-spacing: 0.25em;
+  font-weight: 500;
+  margin: 0 0 4px;
+}
+.dino-project > span {
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  color: var(--muted-foreground);
+}
+.dino-live {
+  margin-left: auto;
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+}
+.dino-status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #a9d7c2;
+  box-shadow: 0 0 10px #a9d7c255;
+}
+.dino-session {
+  position: absolute;
+  left: 38px;
+  top: 116px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  letter-spacing: 0.14em;
+  font-size: 9px;
+  color: var(--muted-foreground);
+}
+.dino-session span:first-child {
+  color: var(--foreground);
+}
+.dino-driver {
+  position: absolute;
+  left: 38px;
+  bottom: 170px;
+  width: 244px;
+  pointer-events: none;
+  text-shadow: 0 2px 18px #000;
+}
+.dino-eyebrow {
+  font-size: 9px;
+  letter-spacing: 0.13em;
+}
+.dino-eyebrow span {
+  color: var(--primary);
+  padding: 0 9px;
+}
+.dino-driver h2 {
+  font-family: var(--font-sans);
+  font-size: 42px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  margin: 16px 0 22px;
+}
+.dino-driver h2 span {
+  display: block;
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 8px;
+  letter-spacing: 0.09em;
+  color: var(--muted-foreground);
+}
+.dino-speed {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.dino-speed strong {
+  font-size: 65px;
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: -0.08em;
+  font-variant-numeric: tabular-nums;
+}
+.dino-speed > span {
+  font-size: 8px;
+  color: var(--muted-foreground);
+}
+.dino-gear {
+  margin-left: auto;
+  font-size: 33px;
+  border-left: 1px solid var(--border);
+  padding-left: 25px;
+}
+.dino-gear small {
+  display: block;
+  font-size: 8px;
+  color: var(--muted-foreground);
+  margin-top: 5px;
+}
+.dino-rpm {
+  height: 2px;
+  margin: 17px 0;
+  background: var(--border);
+}
+.dino-rpm i,
+.dino-lap-progress i {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+  transition: width 0.2s linear;
+}
+.dino-numbers {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+}
+.dino-numbers dt {
+  font-size: 7px;
+  color: var(--muted-foreground);
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+.dino-numbers dd {
+  margin: 0;
+}
+.dino-numbers small {
+  font-size: 7px;
+}
+.dino-anger {
+  color: var(--primary);
+}
+.dino-race-position {
+  position: absolute;
+  right: 38px;
+  top: 119px;
+  width: 166px;
+  text-align: right;
+}
+.dino-race-position > span {
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: var(--muted-foreground);
+}
+.dino-race-position strong {
+  display: block;
+  font-size: 36px;
+  margin: 8px 0;
+  font-weight: 400;
+}
+.dino-race-position i {
+  font-style: normal;
+  font-size: 16px;
+  color: var(--muted-foreground);
+}
+.dino-lap-progress {
+  height: 2px;
+  background: var(--border);
+  margin-bottom: 10px;
+}
+.dino-race-position small {
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+.dino-footer {
+  position: absolute;
+  left: 38px;
+  right: 38px;
+  bottom: 24px;
+  background: linear-gradient(transparent, #09121b99);
+  padding-top: 18px;
+}
+.dino-controls {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+.dino-controls button {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  border-radius: 0;
+}
+.dino-controls button:first-child {
+  height: 42px;
+  padding: 0 20px;
+  margin-right: 6px;
+  gap: 28px;
+}
+.dino-controls kbd {
+  font-size: 8px;
+  opacity: 0.45;
+  margin-left: 10px;
+}
+.dino-settings {
+  position: absolute;
+  right: 0;
+  top: 26px;
+  display: flex;
+  gap: 12px;
+}
+.dino-settings button {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--muted-foreground);
+}
+.dino-caption {
+  border-top: 1px solid var(--border);
+  margin-top: 22px;
+  padding-top: 15px;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  font-size: 7px;
+  letter-spacing: 0.15em;
+  color: var(--muted-foreground);
+}
+.dino-hints {
+  transition: opacity 1s;
+}
+.dinorace[data-interacted="true"] .dino-hints {
+  opacity: 0.35;
+}
+.dino-engineering {
+  position: absolute;
+  top: 106px;
+  right: 28px;
+  bottom: 142px;
+  width: 304px;
+  overflow: auto;
+  padding: 18px;
+  background: #0a1722eb;
+  border: 1px solid #6ec8e744;
+  backdrop-filter: blur(16px);
+  font-size: 9px;
+}
+.dino-panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  letter-spacing: 0.12em;
+  color: #a8e6f7;
+}
+.dino-engineering p {
+  color: var(--muted-foreground);
+  font-size: 8px;
+}
+.dino-debug-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  margin: 18px 0;
+}
+.dino-debug-controls button {
+  justify-content: start;
+  font: inherit;
+  height: 27px;
+}
+.dino-debug-controls button[aria-pressed="true"] {
+  background: #254653;
+  color: #c9f2ff;
+}
+.dino-debug-stats {
+  display: grid;
+  gap: 9px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+.dino-debug-stats > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.dino-debug-stats dt {
+  color: var(--muted-foreground);
+  font-size: 8px;
+}
+.dino-debug-stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.dino-scene-graph {
+  height: 170px;
+  overflow: auto;
+  font-size: 8px;
+  line-height: 1.8;
+  color: #a8e6f7;
+}
+.dino-job-id {
+  overflow-wrap: anywhere;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.dino-engineering a {
+  font-size: 8px;
+  color: #a8e6f7;
+}
+.dino-node-labels {
+  line-height: 1.8;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.dinorace[data-engineering="true"] .dino-race-position {
+  display: none;
+}
+.dino-loading,
+.dino-intro {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 14px;
+  background: #030608;
+}
+.dino-loading span,
+.dino-intro span {
+  font-size: 22px;
+  letter-spacing: 0.36em;
+}
+.dino-loading small,
+.dino-intro small {
+  font-size: 8px;
+  letter-spacing: 0.24em;
+  color: var(--muted-foreground);
+}
+.dino-intro {
+  pointer-events: none;
+  animation: dino-reveal 6s forwards;
+}
+@keyframes dino-reveal {
+  0%,
+  33% {
+    opacity: 1;
+  }
+  75%,
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+.dino-failure {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(90%, 560px);
+  padding: 32px;
+  border: 1px solid var(--border);
+  background: var(--background);
+}
+.dino-failure h2 {
+  font-size: 22px;
+  font-weight: 500;
+}
+.dino-failure > div {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+.dino-failure pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+  margin-top: 20px;
+}
+@media (max-width: 1100px) {
+  .dino-settings {
+    position: static;
+    margin-top: 12px;
+  }
+  .dino-driver {
+    bottom: 185px;
+  }
+}
+@media (max-width: 700px) {
+  .dino-header {
+    padding: 22px 18px;
+    gap: 15px;
+  }
+  .dino-wordmark {
+    font-size: 22px;
+  }
+  .dino-project {
+    padding-left: 14px;
+  }
+  .dino-project h1 {
+    font-size: 11px;
+  }
+  .dino-project > span {
+    font-size: 6px;
+  }
+  .dino-live {
+    display: none;
+  }
+  .dino-session {
+    left: 18px;
+    top: 92px;
+    font-size: 7px;
+  }
+  .dino-race-position {
+    right: 18px;
+    top: 90px;
+    width: 100px;
+  }
+  .dino-race-position > span {
+    font-size: 6px;
+  }
+  .dino-race-position strong {
+    font-size: 25px;
+  }
+  .dino-driver {
+    left: 18px;
+    bottom: 182px;
+    width: 190px;
+  }
+  .dino-driver h2 {
+    font-size: 29px;
+    margin: 12px 0;
+  }
+  .dino-speed strong {
+    font-size: 47px;
+  }
+  .dino-eyebrow {
+    font-size: 7px;
+  }
+  .dino-footer {
+    left: 18px;
+    right: 18px;
+    bottom: max(16px, env(safe-area-inset-bottom));
+  }
+  .dino-controls {
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+  .dino-controls button {
+    font-size: 8px;
+  }
+  .dino-controls button:first-child {
+    height: 36px;
+    padding: 0 12px;
+    gap: 12px;
+  }
+  .dino-controls kbd {
+    display: none;
+  }
+  .dino-settings {
+    gap: 3px;
+  }
+  .dino-caption {
+    margin-top: 12px;
+    padding-top: 12px;
+    font-size: 6px;
+  }
+  .dino-hints {
+    display: none;
+  }
+  .dino-engineering {
+    top: 80px;
+    right: 14px;
+    left: 14px;
+    bottom: 170px;
+    width: auto;
+  }
+  .dinorace[data-engineering="true"] .dino-driver {
+    display: none;
+  }
+}
+@media (max-height: 600px) {
+  .dino-driver {
+    bottom: 135px;
+  }
+  .dino-driver h2 {
+    font-size: 25px;
+    margin: 8px 0;
+  }
+  .dino-speed strong {
+    font-size: 40px;
+  }
+  .dino-numbers,
+  .dino-rpm,
+  .dino-session {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dino-intro {
+    display: none;
+  }
+  .dino-rpm i,
+  .dino-lap-progress i {
+    transition: none;
+  }
+}

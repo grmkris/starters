@@ -13,6 +13,7 @@ export default defineConfig({
     // proxy in production, so the client never needs to know the server's port
     // and a device that can reach this dev server can reach the socket too.
     proxy: {
+      "/api/dinorace": { target: `http://127.0.0.1:${serverPort}` },
       "/realtime": { target: `ws://127.0.0.1:${serverPort}`, ws: true },
     },
     // Two worktrees cannot both bind 3000, and `strictPort` is right to fail

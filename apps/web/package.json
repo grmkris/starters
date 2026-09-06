@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@agent-native/domain": "workspace:*",
+    "@agent-native/game-core": "workspace:*",
     "@agent-native/game-three": "workspace:*",
     "@agent-native/protocol": "workspace:*",
     "@agent-native/ui": "workspace:*",

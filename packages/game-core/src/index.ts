@@ -4,6 +4,16 @@ import type { Entity, World } from "koota";
 import { Movement, Player, Position } from "./traits";
 
 export {
+  createDinoDriveState,
+  stepDinoDrive,
+  recoverDinoDrive,
+  DINO_DRIVE_STEP,
+} from "./dinorace-driving";
+export type { DinoDriveInput, DinoDriveState } from "./dinorace-driving";
+
+export { raceDuration, raceTrackLength, racingLine, sampleRace } from "./race";
+
+export {
   COUNTDOWN_SECONDS,
   createDuelSimulation,
   FIELD_HALF_WIDTH,

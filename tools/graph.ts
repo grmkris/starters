@@ -55,6 +55,7 @@ export const nodes: readonly Node[] = [
     layer: "app",
     role: "Composition root for React, TanStack Router, transport adapters, and wagmi.",
     mayImport: [
+      "@agent-native/game-core",
       "@agent-native/domain",
       "@agent-native/game-three",
       "@agent-native/protocol",

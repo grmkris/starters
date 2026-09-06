@@ -8,6 +8,7 @@
   ],
   "type": "module",
   "scripts": {
+    "dinorace:generate": "bun apps/server/src/dinorace/generate.ts",
     "dev": "turbo run dev --parallel",
     "dev:web": "turbo run dev --filter=@agent-native/web",
     "dev:server": "turbo run dev --filter=@agent-native/server",

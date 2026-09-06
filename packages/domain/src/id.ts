@@ -130,6 +130,9 @@ export type RoomId = typeof RoomId.Type;
 export const ClientId = makeIdSchema("cli", "ClientId");
 export type ClientId = typeof ClientId.Type;
 
+export const DinoRaceJobId = makeIdSchema("dnj", "DinoRaceJobId");
+export type DinoRaceJobId = typeof DinoRaceJobId.Type;
+
 /**
  * The room every client joins before the application introduces its own room
  * lifecycle. A well-known identifier rather than a generated one so that a

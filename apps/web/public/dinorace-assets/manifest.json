@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "asset": "scene.glb",
+  "preview": "preview.png",
+  "jobId": "dnj_01m1tvb4s8ecys40qshmxmjaxk",
+  "inputHash": "9315a5993f4f4826f3adc89546bf84dc302f4ece9e19ce6c02eea018d0b8dc59",
+  "pipelineVersion": "1",
+  "blenderVersion": "4.5.3 LTS",
+  "generatedAt": "2026-09-06T07:54:00.275951+00:00",
+  "durationSeconds": 10.782,
+  "bytes": 1698140,
+  "triangles": 79826,
+  "materials": 16,
+  "textures": 0,
+  "animations": 0,
+  "identity": {
+    "species": "unicorn",
+    "name": "AURELIA",
+    "classification": "TWIN-HORN UNICORN",
+    "massKg": 940,
+    "horns": [
+      "DINORACE_HORN_L",
+      "DINORACE_HORN_R"
+    ]
+  },
+  "objects": {
+    "car": "DINORACE_CAR",
+    "driver": "DINORACE_DRIVER",
+    "wheels": [
+      "DINORACE_WHEEL_FL",
+      "DINORACE_WHEEL_FR",
+      "DINORACE_WHEEL_RL",
+      "DINORACE_WHEEL_RR"
+    ],
+    "colliders": [
+      "DINORACE_COLLIDER_VEHICLE",
+      "DINORACE_COLLIDER_DRIVER"
+    ]
+  },
+  "bounds": {
+    "driver": {
+      "min": [
+        -0.888,
+        0.67,
+        -4.4184
+      ],
+      "max": [
+        0.885,
+        5.5311,
+        2.2509
+      ]
+    },
+    "vehicle": {
+      "min": [
+        -2.341,
+        0.0,
+        -3.635
+      ],
+      "max": [
+        2.341,
+        2.025,
+        3.57
+      ]
+    }
+  },
+  "anchors": {
+    "cockpit": [
+      0,
+      1.1,
+      0
+    ],
+    "cameraTarget": [
+      0,
+      2.5,
+      0
+    ],
+    "hip": [
+      0,
+      1.6600000000000001,
+      -0.74
+    ],
+    "head": [
+      0,
+      4.140000000000001,
+      1.05
+    ],
+    "tail": [
+      0.38,
+      1.4000000000000001,
+      -4.3
+    ]
+  },
+  "fit": {
+    "headClearance": 2.59,
+    "cockpitWidthDelta": 0.14,
+    "tailIntersections": 3,
+    "driverHeight": 4.861,
+    "driverLength": 6.669
+  }
+}

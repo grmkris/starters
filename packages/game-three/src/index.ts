@@ -1,3 +1,13 @@
+export { DinoRaceCanvas } from "./dinorace-canvas";
+export type {
+  DinoRaceCamera,
+  DinoRaceDebug,
+  DinoRaceInspection,
+  DinoRaceMetrics,
+  DinoRacePalette,
+  DinoRaceQuality,
+  DinoRaceSource,
+} from "./dinorace-source";
 export { DuelCanvas } from "./duel-canvas";
 export type { DuelField, DuelLayout, DuelModels } from "./duel-canvas";
 export type {

@@ -1,0 +1,22 @@
+services:
+  blender-worker:
+    build:
+      context: .
+      dockerfile: scripts/dinorace/Dockerfile
+    user: "${DINORACE_UID:-1000}:${DINORACE_GID:-1000}"
+    working_dir: /workspace
+    volumes:
+      - .:/workspace:ro
+      - ./.dinorace:/jobs
+      - ./apps/web/public/dinorace-assets:/workspace/apps/web/public/dinorace-assets
+    environment:
+      DINORACE_BLENDER_RENDER_DEVICE: "${DINORACE_BLENDER_RENDER_DEVICE:-cpu}"
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: "${DINORACE_CPUS:-4}"
+    mem_limit: "${DINORACE_MEMORY:-4g}"
+    pids_limit: 256

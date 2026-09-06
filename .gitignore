@@ -22,3 +22,7 @@ packages/contracts/broadcast/
 # Local tools
 .DS_Store
 *.log
+
+# Isolated Blender jobs; public/dinorace-assets is the deliberate demo fixture.
+.dinorace/
+__pycache__/

@@ -4,6 +4,12 @@ import { ClientId } from "./id";
 
 export { ClientId, LOBBY_ROOM_ID, makeIdSchema, RoomId } from "./id";
 export type { IdSchema, TypeId } from "./id";
+export { DinoRaceJobId } from "./id";
+export {
+  defaultDinoRaceJob,
+  DinoRaceAssetJob,
+  DinoRaceManifest,
+} from "./dinorace";
 
 export const PROTOCOL_VERSION = 1 as const;
 

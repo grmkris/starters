@@ -42,7 +42,17 @@ const duelRoomRoute = createRoute({
   path: "/duel/$code",
 });
 
+const dinoRaceRoute = createRoute({
+  component: lazyRouteComponent(
+    async () => await import("./routes/dinorace-page"),
+    "DinoRacePage"
+  ),
+  getParentRoute: () => rootRoute,
+  path: "/dinorace",
+});
+
 const routeTree = rootRoute.addChildren([
+  dinoRaceRoute,
   indexRoute,
   architectureRoute,
   duelRoute,
