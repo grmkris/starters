@@ -32,6 +32,16 @@ export interface DuelField {
   readonly laneHalfHeight: number;
 }
 
+/**
+ * How the phone is held. Portrait puts two phones side by side and the seam
+ * on the long edge between them, screen-up being -z. Landscape stacks them,
+ * one above the other, the seam still on the long edge between them, and
+ * screen-up becomes -x: for side -1 the seam is at the bottom of its screen,
+ * for side 1 at the top. Both keep screen-right the same world direction on
+ * both phones, so a shot keeps its heading as it crosses.
+ */
+export type DuelLayout = "portrait" | "landscape";
+
 /** URLs of glTF files to stand in for the procedural models, per slot. */
 export interface DuelModels {
   readonly player?: string | undefined;
@@ -71,6 +81,7 @@ const SeamMarker = ({ clientId, palette, source }: SeamMarkerProps) => {
 
 interface LaneProps {
   readonly field: DuelField;
+  readonly layout: DuelLayout;
   readonly models?: DuelModels | undefined;
   readonly onModelState?: ((state: ModelState) => void) | undefined;
   readonly localClientId: string | null;
@@ -81,6 +92,7 @@ interface LaneProps {
 
 const Lane = ({
   field,
+  layout,
   localClientId,
   models,
   onModelState,
@@ -109,11 +121,15 @@ const Lane = ({
   return (
     <>
       <OrthographicCamera
+        key={layout}
         makeDefault
+        onUpdate={(camera) => {
+          camera.lookAt(centreX, 0, 0);
+          camera.updateProjectionMatrix();
+        }}
         position={[centreX, 20, 0]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        up={[0, 0, -1]}
-        zoom={width / laneWidth}
+        up={layout === "portrait" ? [0, 0, -1] : [-1, 0, 0]}
+        zoom={layout === "portrait" ? width / laneWidth : width / laneHeight}
       />
       <color attach="background" args={[palette.background]} />
       <ambientLight intensity={0.6} />
@@ -122,7 +138,7 @@ const Lane = ({
         intensity={2}
         position={[centreX - side * 3, 8, -3]}
       />
-      <ObliqueGroup>
+      <ObliqueGroup axis={layout === "portrait" ? "z" : "x"}>
         <Grid
           args={[laneWidth, laneHeight]}
           cellColor={palette.grid}
@@ -191,6 +207,7 @@ const Lane = ({
 interface DuelCanvasProps {
   readonly className?: string;
   readonly field: DuelField;
+  readonly layout: DuelLayout;
   readonly models?: DuelModels | undefined;
   readonly onModelState?: ((state: ModelState) => void) | undefined;
   readonly localClientId: string | null;
@@ -202,6 +219,7 @@ interface DuelCanvasProps {
 export const DuelCanvas = ({
   className,
   field,
+  layout,
   localClientId,
   models,
   onModelState,
@@ -216,6 +234,7 @@ export const DuelCanvas = ({
     >
       <Lane
         field={field}
+        layout={layout}
         localClientId={localClientId}
         models={models}
         onModelState={onModelState}

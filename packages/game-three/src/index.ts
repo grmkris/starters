@@ -1,5 +1,5 @@
 export { DuelCanvas } from "./duel-canvas";
-export type { DuelField, DuelModels } from "./duel-canvas";
+export type { DuelField, DuelLayout, DuelModels } from "./duel-canvas";
 export type {
   Duelist,
   DuelEvent,
@@ -9,6 +9,7 @@ export type {
 export { ModelSlot } from "./model-slot";
 export type { ModelState } from "./model-slot";
 export { obliqueShear } from "./oblique";
+export type { ObliqueAxis } from "./oblique";
 export { OBLIQUE_K, ObliqueGroup } from "./oblique-group";
 export { defaultWorldFeel, WorldCanvas } from "./world-canvas";
 export type { WorldFeel, WorldPalette } from "./world-canvas";

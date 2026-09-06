@@ -25,6 +25,15 @@ describe("oblique shear", () => {
     expect(top.z).toBeCloseTo(2 - K, 10);
   });
 
+  test("leans along x instead when screen-up is -x", () => {
+    const top = new Vector3(1, 1, 2).applyMatrix4(obliqueShear(K, "x"));
+    const ground = new Vector3(-3, 0, 1).applyMatrix4(obliqueShear(K, "x"));
+
+    expect(top.x).toBeCloseTo(1 - K, 10);
+    expect(top.z).toBe(2);
+    expect([ground.x, ground.y, ground.z]).toEqual([-3, 0, 1]);
+  });
+
   test("with no lean, is the identity", () => {
     const point = new Vector3(2, 3, -1).applyMatrix4(obliqueShear(0));
 

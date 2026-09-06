@@ -65,3 +65,25 @@ export const recordDuelSnapshots = (page: Page): DuelFrame[] => {
   });
   return frames;
 };
+
+const IntentFrame = Schema.Struct({
+  type: Schema.Literals(["duel.move", "duel.fire"]),
+});
+
+const decodeIntentFrame = Schema.decodeUnknownResult(
+  Schema.fromJsonString(IntentFrame)
+);
+
+/** Collects the duel intent the page sends, in order. Register before `goto`. */
+export const recordDuelIntent = (page: Page): ("duel.move" | "duel.fire")[] => {
+  const sent: ("duel.move" | "duel.fire")[] = [];
+  page.on("websocket", (socket) => {
+    socket.on("framesent", (frame) => {
+      const decoded = decodeIntentFrame(String(frame.payload));
+      if (Result.isSuccess(decoded)) {
+        sent.push(decoded.success.type);
+      }
+    });
+  });
+  return sent;
+};

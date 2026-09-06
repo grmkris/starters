@@ -1,7 +1,7 @@
 import { DUEL_FIELD, RoomCode } from "@agent-native/domain";
 import type { DuelPlayerSnapshot, Side } from "@agent-native/domain";
 import { DuelCanvas } from "@agent-native/game-three";
-import type { ModelState } from "@agent-native/game-three";
+import type { DuelLayout, ModelState } from "@agent-native/game-three";
 import { Button } from "@agent-native/ui/components/button";
 import { cn } from "@agent-native/ui/lib/utils";
 import { Link, useParams } from "@tanstack/react-router";
@@ -32,13 +32,38 @@ const FIELD = {
 };
 
 /**
- * Where the models live. `?models=off` keeps the procedural bodies, which is
- * how the two are compared and how the fallback path is tested.
+ * Where a model would live. Nothing there means the procedural tank.
+ * `?models=fixture` loads the hand-written stand-in the browser tests use,
+ * and `?models=off` asks for no model at all. The file is probed before it
+ * is handed to the loader, so an absent model never starts a load that
+ * fails and is logged; the slot simply gets no URL.
  */
-const MODELS = { player: "/models/player.glb" };
+const modelUrl = (): string | null => {
+  const choice = new URLSearchParams(window.location.search).get("models");
+  if (choice === "off") {
+    return null;
+  }
+  return choice === "fixture"
+    ? "/models/fixture/player.glb"
+    : "/models/player.glb";
+};
 
-const modelsWanted = (): boolean =>
-  new URLSearchParams(window.location.search).get("models") !== "off";
+const probeModel = async (url: string): Promise<boolean> => {
+  try {
+    const response = await fetch(url, { method: "HEAD" });
+    return (
+      response.ok &&
+      (response.headers.get("content-type") ?? "").startsWith("model/")
+    );
+  } catch {
+    return false;
+  }
+};
+
+const LANDSCAPE = "(orientation: landscape)";
+
+const currentLayout = (): DuelLayout =>
+  window.matchMedia(LANDSCAPE).matches ? "landscape" : "portrait";
 
 interface HealthPipsProps {
   readonly health: number;
@@ -129,12 +154,20 @@ const Overlay = ({ children, testId }: OverlayProps) => (
 interface PhaseOverlayProps {
   readonly code: string;
   readonly duel: DuelMeta;
+  readonly layout: DuelLayout;
   readonly me: DuelPlayerSnapshot | undefined;
   readonly side: Side | null;
 }
 
+const seamHint = (layout: DuelLayout, side: Side | null): string => {
+  if (layout === "landscape") {
+    return side === -1 ? "THE SEAM IS BELOW YOU" : "THE SEAM IS ABOVE YOU";
+  }
+  return side === -1 ? "THE SEAM IS TO YOUR RIGHT" : "THE SEAM IS TO YOUR LEFT";
+};
+
 /** What sits over the lane in each phase. Nothing during play. */
-const PhaseOverlay = ({ code, duel, me, side }: PhaseOverlayProps) => {
+const PhaseOverlay = ({ code, duel, layout, me, side }: PhaseOverlayProps) => {
   if (duel.error !== null) {
     return (
       <Overlay testId="duel-error">
@@ -165,9 +198,7 @@ const PhaseOverlay = ({ code, duel, me, side }: PhaseOverlayProps) => {
             {Math.ceil(duel.countdown)}
           </p>
           <p className="text-muted-foreground font-mono text-xs tracking-[0.2em]">
-            {side === -1
-              ? "THE SEAM IS TO YOUR RIGHT"
-              : "THE SEAM IS TO YOUR LEFT"}
+            {seamHint(layout, side)}
           </p>
         </Overlay>
       );
@@ -263,8 +294,53 @@ export const DuelRoomPage = () => {
     realtimeStore.getDuelSnapshot
   );
   const surface = useRef<HTMLDivElement>(null);
-  const [modelState, setModelState] = useState<ModelState | null>(null);
-  const models = useMemo(() => (modelsWanted() ? MODELS : undefined), []);
+  // No model asked for is the fallback from the start; otherwise the slot's
+  // state is whatever the probe and the loader report.
+  const [modelState, setModelState] = useState<ModelState | null>(() =>
+    modelUrl() === null ? "fallback" : null
+  );
+  const [models, setModels] = useState<
+    { readonly player: string } | undefined
+  >();
+  const [layout, setLayout] = useState<DuelLayout>(currentLayout);
+
+  useEffect(() => {
+    let cancelled = false;
+    const url = modelUrl();
+    if (url === null) {
+      return () => {
+        cancelled = true;
+      };
+    }
+    const look = async (): Promise<void> => {
+      const present = await probeModel(url);
+      if (cancelled) {
+        return;
+      }
+      if (present) {
+        setModels({ player: url });
+      } else {
+        setModelState("fallback");
+      }
+    };
+    void look();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Held upright, two phones sit side by side; held sideways, they stack.
+  // The lane follows the phone rather than asking the phone to turn.
+  useEffect(() => {
+    const query = window.matchMedia(LANDSCAPE);
+    const onChange = (): void => {
+      setLayout(query.matches ? "landscape" : "portrait");
+    };
+    query.addEventListener("change", onChange);
+    return () => {
+      query.removeEventListener("change", onChange);
+    };
+  }, []);
 
   const parsed = decodeCode(code ?? "");
   const validCode = Result.isSuccess(parsed) ? parsed.success : null;
@@ -309,8 +385,12 @@ export const DuelRoomPage = () => {
 
   useLaneInput(surface, {
     currentZ,
-    enabled: duel.phase === "playing",
+    // Listening for the whole duel, not only during play: the rules ignore a
+    // shot outside play and hold a lane target for when play resumes, and
+    // a control that goes dead between rounds feels broken on a phone.
+    enabled: side !== null,
     laneHalfHeight: DUEL_FIELD.laneHalfHeight,
+    layout,
     maxFireAngle: DUEL_FIELD.maxFireAngle,
     side,
   });
@@ -322,6 +402,7 @@ export const DuelRoomPage = () => {
   return (
     <main
       className="relative h-[calc(100dvh-4rem)] w-full overflow-hidden"
+      data-layout={layout}
       data-model={modelState ?? "pending"}
       data-phase={duel.phase ?? "joining"}
       data-testid="duel-root"
@@ -330,6 +411,7 @@ export const DuelRoomPage = () => {
         <DuelCanvas
           className="absolute inset-0"
           field={FIELD}
+          layout={layout}
           localClientId={meta.clientId}
           models={models}
           onModelState={setModelState}
@@ -349,21 +431,13 @@ export const DuelRoomPage = () => {
       />
 
       <Hud me={me} round={duel.round} them={them} />
-      <PhaseOverlay code={validCode} duel={duel} me={me} side={side} />
-
-      {/* Two phones side by side are two portrait screens. iOS cannot be asked
-          to lock, so it is told instead; Android installs lock via the manifest. */}
-      <div
-        className="bg-background absolute inset-0 hidden flex-col items-center justify-center gap-3 p-8 text-center pointer-coarse:landscape:flex"
-        data-testid="duel-turn-phone"
-      >
-        <p className="text-4xl font-semibold tracking-[-0.04em]">
-          Turn your phone upright
-        </p>
-        <p className="text-muted-foreground max-w-xs text-sm">
-          The lane is tall. Two phones side by side make the field.
-        </p>
-      </div>
+      <PhaseOverlay
+        code={validCode}
+        duel={duel}
+        layout={layout}
+        me={me}
+        side={side}
+      />
     </main>
   );
 };

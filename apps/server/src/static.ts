@@ -73,9 +73,12 @@ export const createStaticSite = async (
       });
     }
 
-    // A missing fingerprinted asset is a real 404: serving the page in its
-    // place would hide a stale reference behind a confusing parse error.
-    if (decoded.startsWith(ASSETS_PREFIX)) {
+    // A missing file is a real 404: serving the page in its place would hide
+    // a stale asset, or an absent model, behind a confusing parse error. A
+    // path with an extension in its last segment names a file; a path
+    // without one is a route the router owns.
+    const last = decoded.slice(decoded.lastIndexOf("/") + 1);
+    if (decoded.startsWith(ASSETS_PREFIX) || last.includes(".")) {
       return new Response("Not found", { status: 404 });
     }
 

@@ -1,1 +1,1 @@
-Stand-in models written by `bun run models:fixture`. Replace them with Blender exports that follow `docs/duel-models.md`.
+Put `player.glb` here to replace the procedural tank; see `docs/duel-models.md` for the contract. Nothing here means the game draws its own. The `fixture/` directory holds hand-written stand-ins written by `bun run models:fixture`, used by the browser tests through `?models=fixture`.

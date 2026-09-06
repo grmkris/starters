@@ -82,6 +82,12 @@ describe("static site", () => {
     expect(response.status).toBe(404);
   });
 
+  test("reports a missing file with an extension rather than the page", async () => {
+    const response = await site.respond("/models/player.glb");
+
+    expect(response.status).toBe(404);
+  });
+
   test("refuses a path that climbs out of the site", async () => {
     const plain = await site.respond("/../../../etc/passwd");
     const encoded = await site.respond("/%2e%2e/%2e%2e/etc/passwd");

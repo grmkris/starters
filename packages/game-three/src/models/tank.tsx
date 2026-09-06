@@ -140,6 +140,26 @@ export const Tank = ({
                   roughness={0.4}
                 />
               </mesh>
+              {/* Canopy, side skirts and an exhaust bar, so it reads as a
+                  vehicle rather than a marker at thumb size. */}
+              <mesh position={[0.02, 0.42, 0]}>
+                <icosahedronGeometry args={[0.09, 0]} />
+                <meshBasicMaterial color={colour} toneMapped={false} />
+              </mesh>
+              {[-0.36, 0.36].map((z) => (
+                <mesh key={z} position={[-0.04, 0.07, z]}>
+                  <boxGeometry args={[0.56, 0.08, 0.07]} />
+                  <meshStandardMaterial
+                    color={colour}
+                    flatShading
+                    roughness={0.6}
+                  />
+                </mesh>
+              ))}
+              <mesh position={[-0.44, 0.1, 0]}>
+                <boxGeometry args={[0.05, 0.06, 0.42]} />
+                <meshBasicMaterial color={colour} toneMapped={false} />
+              </mesh>
               {/* Thrusters, lit in the player's colour. */}
               {[-0.18, 0.18].map((z) => (
                 <mesh key={z} position={[-0.32, 0.1, z]}>

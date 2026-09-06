@@ -11,7 +11,7 @@ import { mkdirSync } from "node:fs";
  * recolour a Blender export recolours these.
  */
 
-const OUT = "apps/web/public/models";
+const OUT = "apps/web/public/models/fixture";
 
 type Vec = readonly [number, number, number];
 
@@ -226,12 +226,29 @@ const encodeGlb = (parts: readonly Part[]): Uint8Array => {
 
 mkdirSync(OUT, { recursive: true });
 
-// The player: a wedge hull within 0.8 × 0.6 × 0.8 with an accent strip on top.
+// The player: a wedge hull, a turret and barrel, side skirts, and glowing
+// thrusters and canopy, all within 0.8 × 0.6 × 0.8.
 await Bun.write(
   `${OUT}/player.glb`,
   encodeGlb([
-    { name: "Body", triangles: wedge(0.8, 0.76, 0.26) },
-    { name: "Accent", triangles: box([-0.1, 0.3, 0], [0.16, 0.04, 0.14]) },
+    {
+      name: "Body",
+      triangles: [
+        ...wedge(0.8, 0.72, 0.22),
+        ...box([-0.02, 0.3, 0], [0.15, 0.08, 0.15]),
+        ...box([0.28, 0.3, 0], [0.2, 0.03, 0.03]),
+        ...box([-0.04, 0.07, -0.36], [0.28, 0.04, 0.035]),
+        ...box([-0.04, 0.07, 0.36], [0.28, 0.04, 0.035]),
+      ],
+    },
+    {
+      name: "Accent",
+      triangles: [
+        ...box([0.02, 0.42, 0], [0.07, 0.05, 0.07]),
+        ...box([-0.34, 0.1, -0.18], [0.07, 0.05, 0.06]),
+        ...box([-0.34, 0.1, 0.18], [0.07, 0.05, 0.06]),
+      ],
+    },
   ])
 );
 

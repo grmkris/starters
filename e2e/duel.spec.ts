@@ -1,6 +1,11 @@
 import { expect, test } from "@playwright/test";
 
-import { recordDuelSnapshots } from "./input-frames";
+import { recordDuelIntent, recordDuelSnapshots } from "./input-frames";
+
+// Every duel test waits out a three-second countdown and drives two WebGL
+// pages, and the suite runs several at once; half a minute is not enough on
+// a shared box or a two-core runner.
+test.setTimeout(60_000);
 
 /** Two portrait phones. */
 const phone = {
@@ -100,17 +105,18 @@ test("the bot turns up when asked", async ({ browser }) => {
     })
     .toBe(true);
 
-  // The stand-in model loaded into the slot, and nothing complained.
+  // Nothing sits in the model slot, so the procedural tank stands in, and
+  // the missing file cost nothing on the console.
   await expect(page.getByTestId("duel-root")).toHaveAttribute(
     "data-model",
-    "loaded"
+    "fallback"
   );
   expect(browserErrors).toEqual([]);
 
   await context.close();
 });
 
-test("without a model the procedural tank stands in", async ({ browser }) => {
+test("a model in the slot replaces the tank", async ({ browser }) => {
   const base = test.info().project.use.baseURL ?? "";
   const context = await browser.newContext(phone);
   const page = await context.newPage();
@@ -118,8 +124,8 @@ test("without a model the procedural tank stands in", async ({ browser }) => {
   await page.goto(`${base}/duel`);
   await page.getByRole("button", { name: "Play the bot", exact: true }).click();
   await expect(page).toHaveURL(/\/duel\/[A-Z2-9]{4}$/u);
-  // Same room, models switched off.
-  await page.goto(`${page.url()}?models=off`);
+  // Same room, the hand-written stand-in in the slot.
+  await page.goto(`${page.url()}?models=fixture`);
   await expect(page.getByTestId("duel-root")).toHaveAttribute(
     "data-phase",
     "playing",
@@ -127,9 +133,85 @@ test("without a model the procedural tank stands in", async ({ browser }) => {
   );
   await expect(page.getByTestId("duel-root")).toHaveAttribute(
     "data-model",
-    "fallback"
+    "loaded"
   );
 
+  await context.close();
+});
+
+test("held sideways, a thumb slides across and another shoots", async ({
+  browser,
+}) => {
+  const base = test.info().project.use.baseURL ?? "";
+  const context = await browser.newContext({
+    ...phone,
+    viewport: { height: 390, width: 844 },
+  });
+  const page = await context.newPage();
+  const sent = recordDuelIntent(page);
+
+  await page.goto(`${base}/duel`);
+  await page.getByRole("button", { name: "Play the bot", exact: true }).click();
+  await expect(page).toHaveURL(/\/duel\/[A-Z2-9]{4}$/u);
+  await expect(page.getByTestId("duel-root")).toHaveAttribute(
+    "data-phase",
+    "playing",
+    { timeout: 15_000 }
+  );
+  await expect(page.getByTestId("duel-root")).toHaveAttribute(
+    "data-layout",
+    "landscape"
+  );
+
+  const lane = await page.getByTestId("lane").boundingBox();
+  if (lane === null) {
+    throw new Error("The lane is not on screen");
+  }
+  const midY = lane.y + lane.height / 2;
+  const startX = lane.x + lane.width * 0.3;
+
+  // Two fingers through the touch device itself: the first holds a slow
+  // drag across the lane, the second taps while the first is still down.
+  const touch = await context.newCDPSession(page);
+  const thumb = { id: 0, x: startX, y: midY };
+  await touch.send("Input.dispatchTouchEvent", {
+    touchPoints: [thumb],
+    type: "touchStart",
+  });
+  for (let step = 1; step <= 8; step += 1) {
+    thumb.x = startX + step * 20;
+    // oxlint-disable-next-line eslint/no-await-in-loop -- a drag is a sequence
+    await touch.send("Input.dispatchTouchEvent", {
+      touchPoints: [thumb],
+      type: "touchMove",
+    });
+    // oxlint-disable-next-line eslint/no-await-in-loop -- a drag is a sequence
+    await page.waitForTimeout(40);
+  }
+  await expect.poll(() => sent.includes("duel.move")).toBe(true);
+  const movesBefore = sent.filter((kind) => kind === "duel.move").length;
+
+  const finger = { id: 1, x: lane.x + lane.width * 0.7, y: midY - 60 };
+  await touch.send("Input.dispatchTouchEvent", {
+    touchPoints: [thumb, finger],
+    type: "touchStart",
+  });
+  // A touch end names the points being released: the finger goes, the thumb stays.
+  await touch.send("Input.dispatchTouchEvent", {
+    touchPoints: [finger],
+    type: "touchEnd",
+  });
+
+  // The tap fired while the drag was still held.
+  await expect.poll(() => sent.includes("duel.fire")).toBe(true);
+  expect(
+    sent.filter((kind) => kind === "duel.move").length
+  ).toBeGreaterThanOrEqual(movesBefore);
+
+  await touch.send("Input.dispatchTouchEvent", {
+    touchPoints: [thumb],
+    type: "touchEnd",
+  });
   await context.close();
 });
 
