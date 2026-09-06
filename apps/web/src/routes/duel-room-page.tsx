@@ -17,9 +17,11 @@ import {
 import type { ReactNode } from "react";
 
 import { useLaneInput } from "../hooks/use-lane-input";
+import { startFeedback } from "../lib/feedback";
 import { realtimeStore } from "../lib/realtime-store";
 import type { DuelMeta } from "../lib/realtime-store";
 import { readScenePalette } from "../lib/scene-palette";
+import { keepAwake } from "../lib/wake-lock";
 
 const decodeCode = Schema.decodeUnknownResult(RoomCode);
 
@@ -266,6 +268,21 @@ export const DuelRoomPage = () => {
     };
   }, [validCode]);
 
+  // The hit is one moment: what the lane draws, what the phone plays, and
+  // what it does in the hand all come from the same events. The screen stays
+  // on for the length of the page.
+  useEffect(() => {
+    const feedback = startFeedback(
+      realtimeStore,
+      () => realtimeStore.getMetaSnapshot().clientId
+    );
+    const release = keepAwake();
+    return () => {
+      feedback.stop();
+      release();
+    };
+  }, []);
+
   const me = duel.players.find((player) => player.clientId === meta.clientId);
   const them = duel.players.find((player) => player.clientId !== meta.clientId);
   const { side } = duel;
@@ -318,6 +335,20 @@ export const DuelRoomPage = () => {
 
       <Hud me={me} round={duel.round} them={them} />
       <PhaseOverlay code={validCode} duel={duel} me={me} side={side} />
+
+      {/* Two phones side by side are two portrait screens. iOS cannot be asked
+          to lock, so it is told instead; Android installs lock via the manifest. */}
+      <div
+        className="bg-background absolute inset-0 hidden flex-col items-center justify-center gap-3 p-8 text-center pointer-coarse:landscape:flex"
+        data-testid="duel-turn-phone"
+      >
+        <p className="text-4xl font-semibold tracking-[-0.04em]">
+          Turn your phone upright
+        </p>
+        <p className="text-muted-foreground max-w-xs text-sm">
+          The lane is tall. Two phones side by side make the field.
+        </p>
+      </div>
     </main>
   );
 };

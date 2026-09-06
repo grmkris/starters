@@ -29,6 +29,7 @@
     }
   ],
   "id": "/",
+  "orientation": "portrait",
   "name": "FIELD/01 — Agent Native Runtime",
   "short_name": "FIELD/01",
   "start_url": "/",
