@@ -5,6 +5,7 @@ import { Color, Object3D } from "three";
 import type { InstancedMesh, Mesh } from "three";
 
 import type { DuelSource } from "./duel-source";
+import { ObliqueGroup } from "./oblique-group";
 import type { WorldPalette } from "./world-canvas";
 
 /**
@@ -234,54 +235,60 @@ const Lane = ({ field, localClientId, palette, side, source }: LaneProps) => {
         intensity={2}
         position={[centreX - side * 3, 8, -3]}
       />
-      <Grid
-        args={[laneWidth, laneHeight]}
-        cellColor={palette.grid}
-        cellSize={0.5}
-        position={[centreX, 0, 0]}
-        sectionColor={palette.gridMajor}
-        sectionSize={2}
-      />
-      {/* The seam: the edge of this screen and of the other. */}
-      <mesh position={[0, 0.02, 0]}>
-        <boxGeometry args={[0.06, 0.02, laneHeight]} />
-        <meshBasicMaterial color={palette.local} />
-      </mesh>
-      {/* The lane walls a shot banks off. */}
-      <mesh position={[centreX, 0.02, -field.laneHalfHeight]}>
-        <boxGeometry args={[laneWidth, 0.02, 0.06]} />
-        <meshBasicMaterial color={palette.gridMajor} />
-      </mesh>
-      <mesh position={[centreX, 0.02, field.laneHalfHeight]}>
-        <boxGeometry args={[laneWidth, 0.02, 0.06]} />
-        <meshBasicMaterial color={palette.gridMajor} />
-      </mesh>
-      {roster.map((clientId) =>
-        clientId === localClientId ? (
-          <Duelist
-            clientId={clientId}
-            isLocal
-            key={clientId}
-            palette={palette}
-            source={source}
-          />
-        ) : (
-          <group key={clientId}>
+      <ObliqueGroup>
+        <Grid
+          args={[laneWidth, laneHeight]}
+          cellColor={palette.grid}
+          cellSize={0.5}
+          position={[centreX, 0, 0]}
+          sectionColor={palette.gridMajor}
+          sectionSize={2}
+        />
+        {/* The seam: the edge of this screen and of the other. */}
+        <mesh position={[0, 0.02, 0]}>
+          <boxGeometry args={[0.06, 0.02, laneHeight]} />
+          <meshBasicMaterial color={palette.local} />
+        </mesh>
+        {/* The lane walls a shot banks off. */}
+        <mesh position={[centreX, 0.02, -field.laneHalfHeight]}>
+          <boxGeometry args={[laneWidth, 0.02, 0.06]} />
+          <meshBasicMaterial color={palette.gridMajor} />
+        </mesh>
+        <mesh position={[centreX, 0.02, field.laneHalfHeight]}>
+          <boxGeometry args={[laneWidth, 0.02, 0.06]} />
+          <meshBasicMaterial color={palette.gridMajor} />
+        </mesh>
+        {roster.map((clientId) =>
+          clientId === localClientId ? (
             <Duelist
               clientId={clientId}
-              isLocal={false}
+              isLocal
+              key={clientId}
               palette={palette}
               source={source}
             />
-            <SeamMarker clientId={clientId} palette={palette} source={source} />
-          </group>
-        )
-      )}
-      <Projectiles
-        localClientId={localClientId}
-        palette={palette}
-        source={source}
-      />
+          ) : (
+            <group key={clientId}>
+              <Duelist
+                clientId={clientId}
+                isLocal={false}
+                palette={palette}
+                source={source}
+              />
+              <SeamMarker
+                clientId={clientId}
+                palette={palette}
+                source={source}
+              />
+            </group>
+          )
+        )}
+        <Projectiles
+          localClientId={localClientId}
+          palette={palette}
+          source={source}
+        />
+      </ObliqueGroup>
     </>
   );
 };

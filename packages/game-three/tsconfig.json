@@ -1,8 +1,8 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["react", "three"],
+    "types": ["bun", "react", "three"],
     "strictNullChecks": true
   },
-  "include": ["src"]
+  "include": ["src", "test"]
 }
