@@ -8,8 +8,9 @@ import {
   RoomCode,
   RoomId,
 } from "@agent-native/domain";
+import type { DuelEvent } from "@agent-native/game-three";
 import { decodeClientMessage } from "@agent-native/protocol";
-import type { ResumeClaim } from "@agent-native/protocol";
+import type { ResumeClaim, ServerMessage } from "@agent-native/protocol";
 import { Result, Schema } from "effect";
 
 import { RealtimeStore } from "../src/lib/realtime-store";
@@ -230,5 +231,143 @@ describe("realtime store identity", () => {
 
     // Held in memory for a reconnect within the page; only the reload is lost.
     expect(claimOn(sent[0])).toEqual({ clientId, resumeToken });
+  });
+});
+
+type DuelSnapshotMessage = Extract<
+  ServerMessage,
+  { readonly type: "duel.snapshot" }
+>;
+
+const roomId = RoomId.generate();
+const left = ClientId.generate();
+const right = ClientId.generate();
+
+const duelist = (
+  clientId: ClientId,
+  side: -1 | 1,
+  health: number
+): DuelSnapshotMessage["players"][number] => ({
+  clientId,
+  cooldown: 0,
+  health,
+  position: { x: side * 3, y: 0.5, z: 0 },
+  rematch: false,
+  rounds: 0,
+  side,
+});
+
+const shot = (
+  id: number,
+  ownerId: ClientId,
+  x: number,
+  vz: number
+): DuelSnapshotMessage["projectiles"][number] => ({
+  id,
+  ownerId,
+  position: { x, y: 0.5, z: 0 },
+  velocity: { x: 6.67, z: vz },
+});
+
+const snapshot = (
+  tick: number,
+  overrides: Partial<Omit<DuelSnapshotMessage, "type" | "v" | "seq" | "tick">>
+): DuelSnapshotMessage => ({
+  countdown: 0,
+  phase: "playing",
+  players: [duelist(left, -1, 3), duelist(right, 1, 3)],
+  projectiles: [],
+  roomId,
+  round: 1,
+  seq: tick,
+  tick,
+  type: "duel.snapshot",
+  v: PROTOCOL_VERSION,
+  winner: null,
+  ...overrides,
+});
+
+/** Applies `first` then `second` and returns what happened between them. */
+const between = (
+  first: DuelSnapshotMessage,
+  second: DuelSnapshotMessage
+): DuelEvent[] => {
+  const store = new RealtimeStore(memoryStorage().storage);
+  const events: DuelEvent[] = [];
+  store.apply(first);
+  store.subscribeEvents((event) => {
+    events.push(event);
+  });
+  store.apply(second);
+  return events;
+};
+
+describe("duel events", () => {
+  test("a shot that was not there is a fire", () => {
+    const events = between(
+      snapshot(1, {}),
+      snapshot(2, { projectiles: [shot(1, left, -2.5, 0)] })
+    );
+
+    expect(events).toEqual([
+      { at: { x: -2.5, z: 0 }, id: 1, kind: "fire", ownerId: left },
+    ]);
+  });
+
+  test("a shot whose lane velocity flipped has banked", () => {
+    const events = between(
+      snapshot(1, { projectiles: [shot(1, left, -1, 4)] }),
+      snapshot(2, { projectiles: [shot(1, left, -0.5, -4)] })
+    );
+
+    expect(events.map((event) => event.kind)).toEqual(["bounce"]);
+  });
+
+  test("a shot whose x changed sign has crossed the seam", () => {
+    const events = between(
+      snapshot(1, { projectiles: [shot(1, left, -0.2, 0)] }),
+      snapshot(2, { projectiles: [shot(1, left, 0.15, 0)] })
+    );
+
+    expect(events).toEqual([
+      { at: { x: 0.15, z: 0 }, id: 1, kind: "cross", ownerId: left },
+    ]);
+  });
+
+  test("a player whose health fell was hit by the other", () => {
+    const events = between(
+      snapshot(1, {}),
+      snapshot(2, { players: [duelist(left, -1, 3), duelist(right, 1, 2)] })
+    );
+
+    expect(events).toEqual([
+      { at: { x: 3, z: 0 }, by: left, clientId: right, kind: "hit" },
+    ]);
+  });
+
+  test("entering roundOver and matchOver are announced once each", () => {
+    const over = snapshot(2, { phase: "roundOver", winner: -1 });
+    const first = between(snapshot(1, {}), over);
+    const again = between(
+      over,
+      snapshot(3, { phase: "roundOver", winner: -1 })
+    );
+    const match = between(
+      over,
+      snapshot(4, { phase: "matchOver", winner: -1 })
+    );
+
+    expect(first).toEqual([{ kind: "round", winner: -1 }]);
+    expect(again).toEqual([]);
+    expect(match).toEqual([{ kind: "match", winner: -1 }]);
+  });
+
+  test("a straight shot never banks and a resting player is never hit", () => {
+    const events = between(
+      snapshot(1, { projectiles: [shot(1, left, -2, 0)] }),
+      snapshot(2, { projectiles: [shot(1, left, -1.6, 0)] })
+    );
+
+    expect(events).toEqual([]);
   });
 });

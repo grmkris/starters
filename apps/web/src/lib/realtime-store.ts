@@ -10,7 +10,7 @@ import type {
   RoomId,
   Side,
 } from "@agent-native/domain";
-import type { WorldSource } from "@agent-native/game-three";
+import type { DuelEvent, Duelist, DuelSource } from "@agent-native/game-three";
 import { encodeClientMessage, ResumeClaim } from "@agent-native/protocol";
 import type { ClientMessage, ServerMessage } from "@agent-native/protocol";
 import { Result, Schema } from "effect";
@@ -104,9 +104,10 @@ const browserStorage = (): IdentityStorage | null => {
   }
 };
 
-export class RealtimeStore implements WorldSource {
+export class RealtimeStore implements DuelSource {
   readonly #metaListeners = new Set<() => void>();
   readonly #duelListeners = new Set<() => void>();
+  readonly #eventListeners = new Set<(event: DuelEvent) => void>();
   readonly #positions = new Map<string, { x: number; y: number; z: number }>();
   readonly #rosterListeners = new Set<() => void>();
   readonly #storage: IdentityStorage | null;
@@ -175,6 +176,29 @@ export class RealtimeStore implements WorldSource {
   /** Every shot in flight as of the last snapshot, for the renderer. */
   readonly getProjectiles = (): readonly ProjectileSnapshot[] =>
     this.#projectiles;
+
+  readonly getDuelist = (clientId: string): Duelist | undefined => {
+    const player = this.#duel.players.find(
+      (candidate) => candidate.clientId === clientId
+    );
+    return player === undefined
+      ? undefined
+      : { health: player.health, side: player.side };
+  };
+
+  /**
+   * The moments between one snapshot and the next: a shot born, banked,
+   * across the seam, landed; a round or a match decided. Derived here, once,
+   * so the renderer, the sound and the vibration agree on what happened.
+   */
+  readonly subscribeEvents = (
+    listener: (event: DuelEvent) => void
+  ): (() => void) => {
+    this.#eventListeners.add(listener);
+    return () => {
+      this.#eventListeners.delete(listener);
+    };
+  };
 
   setConnecting(): void {
     this.#updateMeta({ lastError: null, status: "connecting" });
@@ -510,6 +534,7 @@ export class RealtimeStore implements WorldSource {
   #applyDuelSnapshot(
     message: Extract<ServerMessage, { readonly type: "duel.snapshot" }>
   ): void {
+    this.#announceMoments(message);
     this.#replaceRoster(message.players);
     this.#projectiles = message.projectiles;
     this.#meta = { ...this.#meta, tick: message.tick };
@@ -554,6 +579,66 @@ export class RealtimeStore implements WorldSource {
       for (const listener of this.#rosterListeners) {
         listener();
       }
+    }
+  }
+
+  /** Diffs the incoming snapshot against the last one and emits the events. */
+  #announceMoments(
+    next: Extract<ServerMessage, { readonly type: "duel.snapshot" }>
+  ): void {
+    if (this.#eventListeners.size === 0) {
+      return;
+    }
+    const before = new Map(
+      this.#projectiles.map((shot) => [shot.id, shot] as const)
+    );
+    for (const shot of next.projectiles) {
+      const was = before.get(shot.id);
+      const at = { x: shot.position.x, z: shot.position.z };
+      if (was === undefined) {
+        this.#emit({ at, id: shot.id, kind: "fire", ownerId: shot.ownerId });
+        continue;
+      }
+      if (
+        shot.velocity.z !== 0 &&
+        Math.sign(was.velocity.z) !== Math.sign(shot.velocity.z)
+      ) {
+        this.#emit({ at, id: shot.id, kind: "bounce" });
+      }
+      if (Math.sign(was.position.x) !== Math.sign(shot.position.x)) {
+        this.#emit({ at, id: shot.id, kind: "cross", ownerId: shot.ownerId });
+      }
+    }
+
+    for (const player of next.players) {
+      const was = this.#duel.players.find(
+        (candidate) => candidate.clientId === player.clientId
+      );
+      if (was !== undefined && player.health < was.health) {
+        const by =
+          next.players.find(
+            (candidate) => candidate.clientId !== player.clientId
+          )?.clientId ?? player.clientId;
+        this.#emit({
+          at: { x: player.position.x, z: player.position.z },
+          by,
+          clientId: player.clientId,
+          kind: "hit",
+        });
+      }
+    }
+
+    if (next.phase === "roundOver" && this.#duel.phase !== "roundOver") {
+      this.#emit({ kind: "round", winner: next.winner });
+    }
+    if (next.phase === "matchOver" && this.#duel.phase !== "matchOver") {
+      this.#emit({ kind: "match", winner: next.winner });
+    }
+  }
+
+  #emit(event: DuelEvent): void {
+    for (const listener of this.#eventListeners) {
+      listener(event);
     }
   }
 
