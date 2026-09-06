@@ -5,10 +5,12 @@ import {
   LOBBY_ROOM_ID,
   makeResumeToken,
   PROTOCOL_VERSION,
+  RoomCode,
+  RoomId,
 } from "@agent-native/domain";
 import { decodeClientMessage } from "@agent-native/protocol";
 import type { ResumeClaim } from "@agent-native/protocol";
-import { Result } from "effect";
+import { Result, Schema } from "effect";
 
 import { RealtimeStore } from "../src/lib/realtime-store";
 import type {
@@ -34,6 +36,8 @@ const memoryStorage = () => {
   };
   return { entries, storage };
 };
+
+const asCode = Schema.decodeUnknownSync(RoomCode);
 
 /** A store that, like the runtime page, wants the lobby. */
 const lobbyStore = (storage: IdentityStorage | null): RealtimeStore => {
@@ -168,6 +172,51 @@ describe("realtime store identity", () => {
 
     expect(claimOn(sent[0])).toBeNull();
     expect(entries.size).toBe(0);
+  });
+
+  test("asks for the bot once the socket opens, not before", () => {
+    const store = new RealtimeStore(memoryStorage().storage);
+    store.botDuel();
+    const { sent, socket } = openSocket();
+
+    store.attach(socket);
+
+    const first = decodeClientMessage(sent[0] ?? "");
+    expect(Result.isSuccess(first) ? first.success.type : null).toBe(
+      "duel.bot"
+    );
+  });
+
+  test("joins the room a match names and stops waiting", () => {
+    const store = new RealtimeStore(memoryStorage().storage);
+    const { sent, socket } = openSocket();
+    store.attach(socket);
+    store.queueDuel();
+    expect(store.getDuelSnapshot().waiting).toBe(0);
+    store.apply({
+      seconds: 7,
+      seq: 1,
+      type: "duel.waiting",
+      v: PROTOCOL_VERSION,
+    });
+    expect(store.getDuelSnapshot().waiting).toBe(7);
+
+    const roomId = RoomId.generate();
+    store.apply({
+      code: asCode("ABCD"),
+      roomId,
+      seq: 2,
+      type: "duel.matched",
+      v: PROTOCOL_VERSION,
+    });
+
+    expect(store.getDuelSnapshot().waiting).toBeNull();
+    const last = decodeClientMessage(sent.at(-1) ?? "");
+    expect(
+      Result.isSuccess(last) && last.success.type === "room.join"
+        ? last.success.roomId
+        : null
+    ).toBe(roomId);
   });
 
   test("works without any storage at all", () => {

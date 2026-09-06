@@ -12,7 +12,11 @@ import {
 import type { ClientMessage, ServerMessage } from "@agent-native/protocol";
 import { Result } from "effect";
 
-import { createRealtimeServer, RESUME_TTL_MS } from "../src/index";
+import {
+  createRealtimeServer,
+  IDLE_TIMEOUT_SECONDS,
+  RESUME_TTL_MS,
+} from "../src/index";
 import type { ServerResource } from "../src/index";
 
 /**
@@ -239,14 +243,18 @@ export interface HarnessOptions {
   readonly ledgerDirectory?: string | null;
   /** Overrides the resume window so a test can see it close without waiting a minute. */
   readonly resumeTtlMs?: number;
+  /** Overrides the idle timeout so a test can see a silent socket dropped. */
+  readonly idleTimeoutSeconds?: number;
 }
 
 /** Starts a server on an ephemeral port. Never reads the environment. */
 export const startHarness = ({
+  idleTimeoutSeconds = IDLE_TIMEOUT_SECONDS,
   ledgerDirectory = null,
   resumeTtlMs = RESUME_TTL_MS,
 }: HarnessOptions = {}): Harness => {
   const resource = createRealtimeServer({
+    idleTimeoutSeconds,
     ledgerDirectory,
     port: 0,
     resumeTtlMs,

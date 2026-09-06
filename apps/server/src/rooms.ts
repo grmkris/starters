@@ -44,6 +44,8 @@ export interface SocketData {
   roomId: RoomId | null;
   /** Messages sent on this connection. Only `send` writes it. */
   seq: number;
+  /** When this connection last said anything; the heartbeat's evidence. */
+  lastSeenAt: number;
 }
 
 export type RealtimeSocket = Bun.ServerWebSocket<SocketData>;

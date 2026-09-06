@@ -16,7 +16,15 @@ class RealtimeConnectionError extends Schema.TaggedError<RealtimeConnectionError
 /** Success value of one attempt: the socket was up and then closed cleanly. */
 type SessionEnded = "session-ended";
 
+/**
+ * How often the client pings. The server closes a socket silent for twenty
+ * seconds, so this is three chances; it also keeps the round trip on the
+ * page honest instead of frozen at the last button press.
+ */
+const HEARTBEAT_MS = 5000;
+
 interface OpenSocket {
+  readonly heartbeat: ReturnType<typeof setInterval>;
   readonly listeners: AbortController;
   readonly socket: WebSocket;
 }
@@ -97,10 +105,17 @@ const connectAttempt = Effect.fn("connectAttempt")(
                 options
               );
 
-              return { listeners, socket };
+              // Harmless before the socket opens: the store sends nothing on
+              // a socket that is not open.
+              const heartbeat = setInterval(() => {
+                store.ping();
+              }, HEARTBEAT_MS);
+
+              return { heartbeat, listeners, socket };
             }),
-            ({ listeners, socket }) =>
+            ({ heartbeat, listeners, socket }) =>
               Effect.sync(() => {
+                clearInterval(heartbeat);
                 // Detaching here rather than per-outcome keeps one exit path,
                 // and passing the socket means a superseded attempt cannot
                 // clear a connection a later one already established.

@@ -76,6 +76,20 @@ const ClientMessage = Schema.Union([
     ...Envelope,
     type: Schema.Literals(["duel.rematch"]),
   }),
+  // Wait for whoever is waiting, stop waiting, or ask for the bot. All three
+  // end in a room id the client then joins with `room.join`.
+  Schema.Struct({
+    ...Envelope,
+    type: Schema.Literals(["duel.queue"]),
+  }),
+  Schema.Struct({
+    ...Envelope,
+    type: Schema.Literals(["duel.dequeue"]),
+  }),
+  Schema.Struct({
+    ...Envelope,
+    type: Schema.Literals(["duel.bot"]),
+  }),
 ]);
 
 /** Why a join was refused. `server_full` is the only one where retrying the same room is pointless. */
@@ -166,6 +180,18 @@ const ServerMessage = Schema.Union([
     ...Envelope,
     code: RoomCode,
     type: Schema.Literals(["duel.notFound"]),
+  }),
+  Schema.Struct({
+    ...Envelope,
+    /** How long this connection has waited. Sent once a second. */
+    seconds: Schema.Int,
+    type: Schema.Literals(["duel.waiting"]),
+  }),
+  Schema.Struct({
+    ...Envelope,
+    code: RoomCode,
+    roomId: RoomId,
+    type: Schema.Literals(["duel.matched"]),
   }),
   Schema.Struct({
     ...Envelope,

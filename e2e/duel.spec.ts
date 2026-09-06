@@ -68,3 +68,55 @@ test("a code nobody minted is refused", async ({ page }) => {
 
   await expect(page.getByTestId("duel-error")).toBeVisible();
 });
+
+test("the bot turns up when asked", async ({ browser }) => {
+  const base = test.info().project.use.baseURL ?? "";
+  const context = await browser.newContext(phone);
+  const page = await context.newPage();
+  const feed = recordDuelSnapshots(page);
+
+  await page.goto(`${base}/duel`);
+  await page.getByRole("button", { name: "Play the bot", exact: true }).click();
+  await expect(page).toHaveURL(/\/duel\/[A-Z2-9]{4}$/u);
+  await expect(page.getByTestId("duel-root")).toHaveAttribute(
+    "data-phase",
+    "playing",
+    { timeout: 15_000 }
+  );
+
+  // The bot fires on its own; nothing on this page was tapped.
+  await expect
+    .poll(() => feed.some((frame) => frame.projectiles.length > 0), {
+      timeout: 5000,
+    })
+    .toBe(true);
+
+  await context.close();
+});
+
+test("two strangers waiting are paired", async ({ browser }) => {
+  const base = test.info().project.use.baseURL ?? "";
+  const oneContext = await browser.newContext(phone);
+  const twoContext = await browser.newContext(phone);
+  const one = await oneContext.newPage();
+  const two = await twoContext.newPage();
+
+  await one.goto(`${base}/duel`);
+  await one.getByRole("button", { name: "Play anyone" }).click();
+  await expect(one.getByTestId("duel-queue")).toBeVisible();
+
+  await two.goto(`${base}/duel`);
+  await two.getByRole("button", { name: "Play anyone" }).click();
+
+  await expect(one).toHaveURL(/\/duel\/[A-Z2-9]{4}$/u);
+  await expect(two).toHaveURL(/\/duel\/[A-Z2-9]{4}$/u);
+  expect(new URL(one.url()).pathname).toBe(new URL(two.url()).pathname);
+  await expect(one.getByTestId("duel-root")).toHaveAttribute(
+    "data-phase",
+    "playing",
+    { timeout: 15_000 }
+  );
+
+  await one.context().close();
+  await two.context().close();
+});

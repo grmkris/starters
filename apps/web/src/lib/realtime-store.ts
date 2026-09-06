@@ -47,6 +47,8 @@ export interface DuelMeta {
   readonly roomId: RoomId | null;
   readonly round: number;
   readonly side: Side | null;
+  /** Seconds spent waiting to play anyone, or null when not waiting. */
+  readonly waiting: number | null;
   readonly winner: Side | null;
 }
 
@@ -59,6 +61,7 @@ const initialDuel: DuelMeta = {
   roomId: null,
   round: 0,
   side: null,
+  waiting: null,
   winner: null,
 };
 
@@ -126,6 +129,8 @@ export class RealtimeStore implements WorldSource {
    */
   #duelRequest:
     | { readonly kind: "create" }
+    | { readonly kind: "bot" }
+    | { readonly kind: "queue" }
     | { readonly kind: "find"; readonly code: RoomCode }
     | null = null;
   /** What the next `room.join` presents. Null until a join has succeeded. */
@@ -223,6 +228,33 @@ export class RealtimeStore implements WorldSource {
     this.#room = null;
     this.#duelRequest = { code, kind: "find" };
     this.#updateDuel({ ...initialDuel, code });
+    this.#sendDuelRequest();
+  }
+
+  /** Waits for anyone; `duel.matched` joins the room the server makes. */
+  queueDuel(): void {
+    this.#room = null;
+    this.#duelRequest = { kind: "queue" };
+    this.#updateDuel({ ...initialDuel, waiting: 0 });
+    this.#sendDuelRequest();
+  }
+
+  /** Stops waiting. Nothing else changes; the page is still the landing. */
+  dequeueDuel(): void {
+    this.#duelRequest = null;
+    this.#updateDuel({ ...this.#duel, waiting: null });
+    this.#send({
+      seq: this.#nextSequence(),
+      type: "duel.dequeue",
+      v: PROTOCOL_VERSION,
+    });
+  }
+
+  /** Asks for a room with the bot in it; `duel.created` joins it. */
+  botDuel(): void {
+    this.#room = null;
+    this.#duelRequest = { kind: "bot" };
+    this.#updateDuel(initialDuel);
     this.#sendDuelRequest();
   }
 
@@ -357,6 +389,20 @@ export class RealtimeStore implements WorldSource {
         });
         break;
       }
+      case "duel.waiting": {
+        this.#updateDuel({ ...this.#duel, waiting: message.seconds });
+        break;
+      }
+      case "duel.matched": {
+        this.#updateDuel({
+          ...this.#duel,
+          code: message.code,
+          roomId: message.roomId,
+          waiting: null,
+        });
+        this.joinRoom(message.roomId);
+        break;
+      }
       case "duel.snapshot": {
         this.#applyDuelSnapshot(message);
         break;
@@ -401,20 +447,40 @@ export class RealtimeStore implements WorldSource {
     if (request === null) {
       return;
     }
-    if (request.kind === "create") {
-      this.#send({
-        seq: this.#nextSequence(),
-        type: "duel.create",
-        v: PROTOCOL_VERSION,
-      });
-      return;
+    switch (request.kind) {
+      case "create": {
+        this.#send({
+          seq: this.#nextSequence(),
+          type: "duel.create",
+          v: PROTOCOL_VERSION,
+        });
+        return;
+      }
+      case "bot": {
+        this.#send({
+          seq: this.#nextSequence(),
+          type: "duel.bot",
+          v: PROTOCOL_VERSION,
+        });
+        return;
+      }
+      case "queue": {
+        this.#send({
+          seq: this.#nextSequence(),
+          type: "duel.queue",
+          v: PROTOCOL_VERSION,
+        });
+        return;
+      }
+      case "find": {
+        this.#send({
+          code: request.code,
+          seq: this.#nextSequence(),
+          type: "duel.join",
+          v: PROTOCOL_VERSION,
+        });
+      }
     }
-    this.#send({
-      code: request.code,
-      seq: this.#nextSequence(),
-      type: "duel.join",
-      v: PROTOCOL_VERSION,
-    });
   }
 
   #sendJoin(roomId: RoomId): void {

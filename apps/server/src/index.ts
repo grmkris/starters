@@ -5,11 +5,14 @@ import {
   encodeServerMessage,
   SUPERSEDED_CLOSE_CODE,
 } from "@agent-native/protocol";
-import type { ServerMessageBody } from "@agent-native/protocol";
+import type { ClientMessage, ServerMessageBody } from "@agent-native/protocol";
 import { BunRuntime } from "@effect/platform-bun";
 import { Config, Context, Effect, Layer, Option, Result } from "effect";
 
+import { startBot } from "./bot";
+import type { Bot } from "./bot";
 import { createRoomCodes } from "./codes";
+import { createQueue } from "./queue";
 import { createResumeRegistry } from "./resume";
 import { createRooms } from "./rooms";
 import type { CaptureOutcome, RealtimeSocket, Room, SocketData } from "./rooms";
@@ -27,6 +30,17 @@ const MAX_ROOMS = 12;
 export const RESUME_TTL_MS = 60_000;
 /** How long a duel code stays typeable. Long enough to read it out twice. */
 const ROOM_CODE_TTL_MS = 10 * 60_000;
+/**
+ * A socket that sends nothing for this long is closed by the tick loop. The
+ * client pings every five seconds, so this is three missed pings: long enough
+ * for a phone to change networks, short enough that an abandoned socket does
+ * not hold a duel open. Enforced here rather than by Bun's `idleTimeout`,
+ * which did not close a silent socket when tested; Bun's default remains as
+ * a backstop.
+ */
+export const IDLE_TIMEOUT_SECONDS = 20;
+/** Sent to a socket the heartbeat gave up on. */
+const IDLE_CLOSE_CODE = 4001;
 
 export interface ServerOptions {
   /** `0` asks the host for an ephemeral port. */
@@ -34,6 +48,8 @@ export interface ServerOptions {
   readonly ledgerDirectory: string | null;
   /** How long a disconnected client may reclaim its identity. */
   readonly resumeTtlMs: number;
+  /** Seconds of silence before a socket is closed. */
+  readonly idleTimeoutSeconds: number;
   /**
    * The built web app, served on this origin when present. Null in tests and
    * in development, where Vite serves the page and proxies the socket here.
@@ -72,6 +88,7 @@ const send = (socket: RealtimeSocket, body: ServerMessageBody): void => {
  * `resource.server.port`.
  */
 export const createRealtimeServer = ({
+  idleTimeoutSeconds,
   ledgerDirectory,
   port,
   resumeTtlMs,
@@ -86,6 +103,11 @@ export const createRealtimeServer = ({
 
   const claims = createResumeRegistry(resumeTtlMs);
   const codes = createRoomCodes(ROOM_CODE_TTL_MS);
+  const queue = createQueue<RealtimeSocket>();
+  /** The live bot in each bot room, by room. */
+  const bots = new Map<RoomId, Bot>();
+  /** Where a bot connects. Known once the server has bound its port. */
+  let botUrl: string | null = null;
   /** The socket each identity currently belongs to. */
   const owners = new Map<ClientIdType, RealtimeSocket>();
 
@@ -108,10 +130,26 @@ export const createRealtimeServer = ({
   };
 
   const departed = (socket: RealtimeSocket): void => {
+    queue.dequeue(socket);
     const room = rooms.leave(socket);
     if (room !== null) {
       announcePresence(room);
+      // A bot alone in a room has nobody to play; dismissing it empties the
+      // room, which is then collected as any empty room is.
+      const bot = bots.get(room.id);
+      if (bot !== undefined && room.sockets.size === 1) {
+        bots.delete(room.id);
+        bot.stop();
+      }
     }
+  };
+
+  /** Names a new duel room and tells the socket where it is. */
+  const openDuel = (socket: RealtimeSocket, withBot: boolean) => {
+    const roomId = RoomId.generate();
+    const code = codes.mint(roomId, withBot);
+    send(socket, { code, roomId, type: "duel.created", v: 1 });
+    return { code, roomId };
   };
 
   /** Reports why intent was not taken, or nothing when it was. */
@@ -163,6 +201,80 @@ export const createRealtimeServer = ({
     claims.remember(clientId, socket.data.resumeToken);
   };
 
+  const handleJoin = (
+    socket: RealtimeSocket,
+    message: Extract<ClientMessage, { readonly type: "room.join" }>
+  ): void => {
+    // An identity is reclaimed before the join, so the entity spawns
+    // under the id the client keeps rather than one it must adopt.
+    if (
+      socket.data.roomId === null &&
+      message.resume !== undefined &&
+      claims.reclaim(message.resume.clientId, message.resume.resumeToken)
+    ) {
+      adopt(socket, message.resume.clientId);
+    }
+
+    // A room keeps the rules it was created with; a new one runs a
+    // duel only if its id was minted for one.
+    const kind =
+      rooms.get(message.roomId)?.kind ??
+      (codes.isDuel(message.roomId) ? "duel" : "lobby");
+    const outcome = rooms.join(socket, message.roomId, kind);
+    if (outcome.kind === "rejected") {
+      // Membership failed, not the transport: the socket stays open so
+      // a client can pick another room without a reconnect.
+      send(socket, {
+        reason: outcome.reason,
+        roomId: message.roomId,
+        type: "room.rejected",
+        v: 1,
+      });
+      return;
+    }
+
+    queue.dequeue(socket);
+    send(socket, {
+      capacity: outcome.room.capacity,
+      clientId: socket.data.clientId,
+      connected: outcome.room.sockets.size,
+      roomId: outcome.room.id,
+      type: "room.joined",
+      v: 1,
+    });
+    announcePresence(outcome.room);
+    // A bot room seats its bot whenever a human is in and it is not already:
+    // on the first join, and again after a leave dismissed it.
+    if (
+      botUrl !== null &&
+      codes.wantsBot(outcome.room.id) &&
+      !bots.has(outcome.room.id)
+    ) {
+      bots.set(
+        outcome.room.id,
+        startBot({ roomId: outcome.room.id, url: botUrl })
+      );
+    }
+  };
+
+  const handleQueue = (socket: RealtimeSocket): void => {
+    // Waiting is not being in a room; a socket that queues from a
+    // room leaves it first, and never silently.
+    if (socket.data.roomId !== null) {
+      departed(socket);
+    }
+    const pair = queue.enqueue(socket);
+    if (pair === null) {
+      send(socket, { seconds: 0, type: "duel.waiting", v: 1 });
+      return;
+    }
+    const roomId = RoomId.generate();
+    const code = codes.mint(roomId);
+    for (const member of pair) {
+      send(member, { code, roomId, type: "duel.matched", v: 1 });
+    }
+  };
+
   const server = Bun.serve<SocketData>({
     async fetch(request, bunServer) {
       const url = new URL(request.url);
@@ -183,6 +295,7 @@ export const createRealtimeServer = ({
         const upgraded = bunServer.upgrade(request, {
           data: {
             clientId: ClientId.generate(),
+            lastSeenAt: Date.now(),
             resumeToken: makeResumeToken(),
             roomId: null,
             seq: 0,
@@ -222,6 +335,7 @@ export const createRealtimeServer = ({
         departed(socket);
       },
       message(socket, rawMessage) {
+        socket.data.lastSeenAt = Date.now();
         const decoded = decodeClientMessage(rawMessage.toString());
 
         if (Result.isFailure(decoded)) {
@@ -237,46 +351,7 @@ export const createRealtimeServer = ({
         const message = decoded.success;
         switch (message.type) {
           case "room.join": {
-            // An identity is reclaimed before the join, so the entity spawns
-            // under the id the client keeps rather than one it must adopt.
-            if (
-              socket.data.roomId === null &&
-              message.resume !== undefined &&
-              claims.reclaim(
-                message.resume.clientId,
-                message.resume.resumeToken
-              )
-            ) {
-              adopt(socket, message.resume.clientId);
-            }
-
-            // A room keeps the rules it was created with; a new one runs a
-            // duel only if its id was minted for one.
-            const kind =
-              rooms.get(message.roomId)?.kind ??
-              (codes.isDuel(message.roomId) ? "duel" : "lobby");
-            const outcome = rooms.join(socket, message.roomId, kind);
-            if (outcome.kind === "rejected") {
-              // Membership failed, not the transport: the socket stays open so
-              // a client can pick another room without a reconnect.
-              send(socket, {
-                reason: outcome.reason,
-                roomId: message.roomId,
-                type: "room.rejected",
-                v: 1,
-              });
-              return;
-            }
-
-            send(socket, {
-              capacity: outcome.room.capacity,
-              clientId: socket.data.clientId,
-              connected: outcome.room.sockets.size,
-              roomId: outcome.room.id,
-              type: "room.joined",
-              v: 1,
-            });
-            announcePresence(outcome.room);
+            handleJoin(socket, message);
             break;
           }
           case "room.leave": {
@@ -304,13 +379,19 @@ export const createRealtimeServer = ({
             break;
           }
           case "duel.create": {
-            const roomId = RoomId.generate();
-            send(socket, {
-              code: codes.mint(roomId),
-              roomId,
-              type: "duel.created",
-              v: 1,
-            });
+            openDuel(socket, false);
+            break;
+          }
+          case "duel.bot": {
+            openDuel(socket, true);
+            break;
+          }
+          case "duel.queue": {
+            handleQueue(socket);
+            break;
+          }
+          case "duel.dequeue": {
+            queue.dequeue(socket);
             break;
           }
           case "duel.join": {
@@ -366,8 +447,11 @@ export const createRealtimeServer = ({
     },
   });
 
+  botUrl = `ws://127.0.0.1:${server.port}/realtime`;
+
   const pacer = createTickPacer(TICK_MS);
   let previousFiring = performance.now();
+  let ticksSinceQueueReport = 0;
 
   const interval = setInterval(() => {
     const now = performance.now();
@@ -376,6 +460,24 @@ export const createRealtimeServer = ({
 
     if (owed === 0) {
       return;
+    }
+
+    // Once a second, tell each waiter how long it has been; the client
+    // decides when that is long enough to offer the bot.
+    ticksSinceQueueReport += owed;
+    if (ticksSinceQueueReport >= TICK_RATE) {
+      ticksSinceQueueReport = 0;
+      for (const { entry, seconds } of queue.waiting()) {
+        send(entry, { seconds, type: "duel.waiting", v: 1 });
+      }
+      // The heartbeat. A socket that has said nothing for the timeout is
+      // closed; its close handler then leaves whatever room it was in.
+      const deadline = Date.now() - idleTimeoutSeconds * 1000;
+      for (const socket of owners.values()) {
+        if (socket.data.lastSeenAt < deadline) {
+          socket.close(IDLE_CLOSE_CODE, "no heartbeat");
+        }
+      }
     }
 
     // One clock for every room. N intervals would be N drifting clocks and N
@@ -407,6 +509,10 @@ export const createRealtimeServer = ({
 
   const dispose = async (): Promise<void> => {
     clearInterval(interval);
+    for (const bot of bots.values()) {
+      bot.stop();
+    }
+    bots.clear();
     owners.clear();
     await server.stop(true);
     await rooms.disposeAll();
@@ -441,6 +547,7 @@ class RealtimeServer extends Context.Service<
       const resource = yield* Effect.acquireRelease(
         Effect.sync(() =>
           createRealtimeServer({
+            idleTimeoutSeconds: IDLE_TIMEOUT_SECONDS,
             ledgerDirectory: Option.getOrNull(ledgerDirectory),
             port,
             resumeTtlMs: RESUME_TTL_MS,

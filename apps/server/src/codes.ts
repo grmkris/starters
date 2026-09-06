@@ -14,14 +14,22 @@ import type { RoomCode, RoomId } from "@agent-native/domain";
 interface Entry {
   readonly code: RoomCode;
   readonly expiresAt: number;
+  /** The room is played against the bot; it is seated whenever a human is. */
+  readonly bot: boolean;
 }
 
 export interface RoomCodes {
   /** Names a new duel room. The id is then known to be a duel. */
-  readonly mint: (roomId: RoomId) => RoomCode;
+  readonly mint: (roomId: RoomId, withBot?: boolean) => RoomCode;
   readonly lookup: (code: RoomCode) => RoomId | undefined;
   readonly codeFor: (roomId: RoomId) => RoomCode | undefined;
   readonly isDuel: (roomId: RoomId) => boolean;
+  /**
+   * Whether the room is a bot match. Kept here rather than as a one-shot flag
+   * so a human who leaves and comes back - which a page remount does - finds
+   * the bot seated again, and so the flag lapses with the code.
+   */
+  readonly wantsBot: (roomId: RoomId) => boolean;
   readonly size: () => number;
 }
 
@@ -44,7 +52,7 @@ export const createRoomCodes = (
   };
 
   return {
-    mint: (roomId) => {
+    mint: (roomId, withBot = false) => {
       sweep();
       let code = mintCode();
       // A collision is a one-in-a-million event; retrying is cheaper than
@@ -52,7 +60,7 @@ export const createRoomCodes = (
       while (byCode.has(code)) {
         code = mintCode();
       }
-      byRoom.set(roomId, { code, expiresAt: now() + ttlMs });
+      byRoom.set(roomId, { bot: withBot, code, expiresAt: now() + ttlMs });
       byCode.set(code, roomId);
       return code;
     },
@@ -62,6 +70,7 @@ export const createRoomCodes = (
     },
     codeFor: (roomId) => byRoom.get(roomId)?.code,
     isDuel: (roomId) => byRoom.has(roomId),
+    wantsBot: (roomId) => byRoom.get(roomId)?.bot === true,
     size: () => byRoom.size,
   };
 };

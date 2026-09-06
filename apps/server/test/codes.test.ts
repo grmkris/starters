@@ -32,6 +32,18 @@ describe("room codes", () => {
     expect(codes.isDuel(roomId)).toBe(true);
   });
 
+  test("remembers which rooms are played against the bot", () => {
+    const codes = createRoomCodes(TTL_MS);
+    const human = RoomId.generate();
+    const bot = RoomId.generate();
+    codes.mint(human);
+    codes.mint(bot, true);
+
+    expect(codes.wantsBot(human)).toBe(false);
+    expect(codes.wantsBot(bot)).toBe(true);
+    expect(codes.wantsBot(RoomId.generate())).toBe(false);
+  });
+
   test("knows nothing of a code it never minted", () => {
     const codes = createRoomCodes(TTL_MS);
 

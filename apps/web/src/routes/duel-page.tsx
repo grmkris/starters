@@ -3,18 +3,19 @@ import { Button } from "@agent-native/ui/components/button";
 import { Separator } from "@agent-native/ui/components/separator";
 import { useNavigate } from "@tanstack/react-router";
 import { Result, Schema } from "effect";
-import { SwordsIcon, TicketIcon } from "lucide-react";
+import { BotIcon, GlobeIcon, SwordsIcon, TicketIcon } from "lucide-react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { realtimeStore } from "../lib/realtime-store";
 
 const decodeCode = Schema.decodeUnknownResult(RoomCode);
 
+/** How long to wait for a person before the bot is offered instead. */
+const BOT_OFFER_AFTER_SECONDS = 15;
+
 /**
- * The front door of a duel. Make one and get a code, or type the code from
- * the other phone. "Play anyone" and "Play the bot" arrive with the queue and
- * the bot; they are shown disabled rather than hidden so the shape of the
- * page does not change under people later.
+ * The front door of a duel. Make one and get a code, type the code from the
+ * other phone, wait for anyone, or play the bot.
  */
 export const DuelPage = () => {
   const navigate = useNavigate();
@@ -109,11 +110,61 @@ export const DuelPage = () => {
 
         <Separator className="my-2" />
 
-        <Button className="w-full" disabled size="lg" variant="ghost">
-          Play anyone · soon
-        </Button>
-        <Button className="w-full" disabled size="lg" variant="ghost">
-          Play the bot · soon
+        {duel.waiting === null ? (
+          <Button
+            className="w-full"
+            disabled={!live}
+            onClick={() => {
+              realtimeStore.queueDuel();
+            }}
+            size="lg"
+            variant="outline"
+          >
+            <GlobeIcon data-icon="inline-start" />
+            Play anyone
+          </Button>
+        ) : (
+          <div
+            className="border-border flex flex-col gap-3 border p-4"
+            data-testid="duel-queue"
+          >
+            <p className="text-muted-foreground font-mono text-xs tracking-[0.2em]">
+              LOOKING FOR AN OPPONENT · {duel.waiting}s
+            </p>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  realtimeStore.dequeueDuel();
+                }}
+                variant="ghost"
+              >
+                Cancel
+              </Button>
+              {duel.waiting >= BOT_OFFER_AFTER_SECONDS ? (
+                <Button
+                  onClick={() => {
+                    realtimeStore.botDuel();
+                  }}
+                  variant="outline"
+                >
+                  <BotIcon data-icon="inline-start" />
+                  Play the bot instead
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        )}
+        <Button
+          className="w-full"
+          disabled={!live}
+          onClick={() => {
+            realtimeStore.botDuel();
+          }}
+          size="lg"
+          variant="ghost"
+        >
+          <BotIcon data-icon="inline-start" />
+          Play the bot
         </Button>
       </div>
 
