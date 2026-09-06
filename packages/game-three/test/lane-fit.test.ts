@@ -5,10 +5,7 @@ import { fitLane } from "../src/lane-fit";
 const lane = { length: 8.7, width: 4 };
 
 /** The lane's two edges across it, in units, as the screen shows them. */
-const shown = (
-  screen: { across: number; along: number },
-  side: -1 | 1
-): { near: number; far: number } => {
+const shown = (screen: { across: number; along: number }, side: -1 | 1) => {
   const { cameraX, zoom } = fitLane(screen, lane, side);
   const half = screen.across / zoom / 2;
   return { far: cameraX + side * half, near: cameraX - side * half };
