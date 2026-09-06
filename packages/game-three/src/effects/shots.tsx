@@ -4,7 +4,12 @@ import { AdditiveBlending, Color, Object3D } from "three";
 import type { InstancedMesh } from "three";
 
 import type { DuelSource } from "../duel-source";
-import { STREAK_LENGTH, STREAK_THICKNESS } from "../models/streak";
+import {
+  STREAK_LENGTH,
+  STREAK_THICKNESS,
+  StreakGeometry,
+  StreakMaterial,
+} from "../models/streak";
 import type { WorldPalette } from "../world-canvas";
 
 /**
