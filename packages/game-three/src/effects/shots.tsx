@@ -129,10 +129,8 @@ export const Shots = ({ localClientId, palette, source }: ShotsProps) => {
         frustumCulled={false}
         ref={streaks}
       >
-        <boxGeometry
-          args={[STREAK_LENGTH, STREAK_THICKNESS, STREAK_THICKNESS]}
-        />
-        <meshBasicMaterial toneMapped={false} />
+        <StreakGeometry />
+        <StreakMaterial />
       </instancedMesh>
       <instancedMesh
         args={[undefined, undefined, MAX_SHOTS * TRAIL]}
