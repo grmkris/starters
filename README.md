@@ -39,6 +39,8 @@ Open `/duel` on two phones held upright and put them side by side. One taps **Ne
 
 The whole screen is the control: hold and drag to slide along your lane, tap to shoot straight across the seam, flick toward the seam to shoot at an angle. A steep shot banks once off the wall. Three hits take a round, two rounds the match. Alone, **Play the bot**; with strangers, **Play anyone** pairs you with whoever is waiting and offers the bot after fifteen seconds.
 
+A laptop can take either lane. Open the same link and move with the arrow keys that run along the lane on screen, left and right in a wide window and up and down in a tall one, or WASD. Space fires straight, Q and E bank a shot toward either end of the lane. The line under the score says which keys apply.
+
 Replace the hover tank with your own model: `docs/duel-models.md` is the contract. `docs/decisions/0007-duel-rendering.md` records why the lane is drawn the way it is.
 
 ## Deploy it

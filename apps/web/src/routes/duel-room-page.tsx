@@ -18,6 +18,7 @@ import {
 import type { ReactNode } from "react";
 
 import { useLaneInput } from "../hooks/use-lane-input";
+import { useLaneKeys } from "../hooks/use-lane-keys";
 import { startFeedback } from "../lib/feedback";
 import { realtimeStore } from "../lib/realtime-store";
 import type { DuelMeta } from "../lib/realtime-store";
@@ -61,6 +62,8 @@ const probeModel = async (url: string): Promise<boolean> => {
 };
 
 const LANDSCAPE = "(orientation: landscape)";
+/** A mouse or trackpad, so a keyboard is likely at hand and worth a hint. */
+const FINE_POINTER = "(hover: hover) and (pointer: fine)";
 
 const currentLayout = (): DuelLayout =>
   window.matchMedia(LANDSCAPE).matches ? "landscape" : "portrait";
@@ -166,6 +169,12 @@ const seamHint = (layout: DuelLayout, side: Side | null): string => {
   return side === -1 ? "THE SEAM IS TO YOUR RIGHT" : "THE SEAM IS TO YOUR LEFT";
 };
 
+/** Which keys apply, in the order they sit on the screen. */
+const keysHint = (layout: DuelLayout): string =>
+  layout === "landscape"
+    ? "← → MOVE · SPACE FIRE · Q E BANK"
+    : "↑ ↓ MOVE · SPACE FIRE · Q E BANK";
+
 /** What sits over the lane in each phase. Nothing during play. */
 const PhaseOverlay = ({ code, duel, layout, me, side }: PhaseOverlayProps) => {
   if (duel.error !== null) {
@@ -243,12 +252,13 @@ const PhaseOverlay = ({ code, duel, layout, me, side }: PhaseOverlayProps) => {
 };
 
 interface HudProps {
+  readonly keys: string | null;
   readonly me: DuelPlayerSnapshot | undefined;
   readonly round: number;
   readonly them: DuelPlayerSnapshot | undefined;
 }
 
-const Hud = ({ me, round, them }: HudProps) => (
+const Hud = ({ keys, me, round, them }: HudProps) => (
   <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-4">
     <div className="flex flex-col gap-2">
       {me === undefined ? null : <HealthPips health={me.health} label="YOU" />}
@@ -256,6 +266,14 @@ const Hud = ({ me, round, them }: HudProps) => (
         <HealthPips health={them.health} label="THEM" />
       )}
     </div>
+    {keys === null ? null : (
+      <p
+        className="text-muted-foreground font-mono text-[0.6rem] tracking-[0.18em]"
+        data-testid="duel-keys"
+      >
+        {keys}
+      </p>
+    )}
     <div className="text-muted-foreground text-right font-mono text-[0.65rem] leading-5">
       <p>ROUND / {round === 0 ? "—" : round}</p>
       <p data-testid="duel-score">
@@ -303,6 +321,7 @@ export const DuelRoomPage = () => {
     { readonly player: string } | undefined
   >();
   const [layout, setLayout] = useState<DuelLayout>(currentLayout);
+  const keyboard = useMemo(() => window.matchMedia(FINE_POINTER).matches, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -395,6 +414,16 @@ export const DuelRoomPage = () => {
     side,
   });
 
+  // A laptop across the table plays the same lane with its keys.
+  useLaneKeys({
+    currentZ,
+    enabled: side !== null,
+    laneHalfHeight: DUEL_FIELD.laneHalfHeight,
+    layout,
+    maxFireAngle: DUEL_FIELD.maxFireAngle,
+    playerSpeed: DUEL_FIELD.playerSpeed,
+  });
+
   if (validCode === null) {
     return <InvalidCode />;
   }
@@ -430,7 +459,12 @@ export const DuelRoomPage = () => {
         role="application"
       />
 
-      <Hud me={me} round={duel.round} them={them} />
+      <Hud
+        keys={keyboard ? keysHint(layout) : null}
+        me={me}
+        round={duel.round}
+        them={them}
+      />
       <PhaseOverlay
         code={validCode}
         duel={duel}

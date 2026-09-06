@@ -40,6 +40,11 @@ export const recordInputs = (page: Page): InputVector[] => {
 
 const DuelFrame = Schema.Struct({
   phase: Schema.String,
+  players: Schema.Array(
+    Schema.Struct({
+      position: Schema.Struct({ x: Schema.Finite, z: Schema.Finite }),
+    })
+  ),
   projectiles: Schema.Array(
     Schema.Struct({ position: Schema.Struct({ x: Schema.Finite }) })
   ),
@@ -82,6 +87,37 @@ export const recordDuelIntent = (page: Page): ("duel.move" | "duel.fire")[] => {
       const decoded = decodeIntentFrame(String(frame.payload));
       if (Result.isSuccess(decoded)) {
         sent.push(decoded.success.type);
+      }
+    });
+  });
+  return sent;
+};
+
+const CommandFrame = Schema.Union([
+  Schema.Struct({
+    move: Schema.Struct({ target: Schema.Finite }),
+    type: Schema.Literals(["duel.move"]),
+  }),
+  Schema.Struct({
+    fire: Schema.Struct({ angle: Schema.Finite }),
+    type: Schema.Literals(["duel.fire"]),
+  }),
+]);
+
+const decodeCommandFrame = Schema.decodeUnknownResult(
+  Schema.fromJsonString(CommandFrame)
+);
+
+export type DuelCommand = typeof CommandFrame.Type;
+
+/** Collects the duel commands the page sends, with their values. Register before `goto`. */
+export const recordDuelCommands = (page: Page): DuelCommand[] => {
+  const sent: DuelCommand[] = [];
+  page.on("websocket", (socket) => {
+    socket.on("framesent", (frame) => {
+      const decoded = decodeCommandFrame(String(frame.payload));
+      if (Result.isSuccess(decoded)) {
+        sent.push(decoded.success);
       }
     });
   });

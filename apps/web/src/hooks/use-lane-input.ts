@@ -2,6 +2,7 @@ import type { DuelLayout } from "@agent-native/game-three";
 import { useEffect } from "react";
 import type { RefObject } from "react";
 
+import { alongLane, createMoveSender, towardSeam } from "../lib/lane-control";
 import { realtimeStore } from "../lib/realtime-store";
 
 /**
@@ -14,10 +15,8 @@ import { realtimeStore } from "../lib/realtime-store";
  * flick's angle. The thresholds separate "I moved a little while tapping"
  * from "I meant to drag", and "a flick" from "a slow drag that was short".
  *
- * The lane runs down the screen in portrait and across it in landscape, and
- * the seam is on the right or left in portrait and below or above in
- * landscape, so the mapping from screen deltas to lane units and to "toward
- * the seam" depends on the layout and the side.
+ * How the screen maps onto the lane and toward the seam is in `lane-control`,
+ * shared with the keyboard.
  */
 
 export interface LaneInputOptions {
@@ -36,8 +35,6 @@ const TAP_SLOP_PX = 8;
 const FLICK_MS = 260;
 /** A flick has to travel this far toward the seam to count as a shot. */
 const FLICK_PX = 24;
-/** The simulation consumes one target per tick, so sending faster is waste. */
-const SEND_INTERVAL_MS = 50;
 
 interface Gesture {
   readonly startX: number;
@@ -46,27 +43,6 @@ interface Gesture {
   readonly startZ: number;
   dragging: boolean;
 }
-
-const quantise = (value: number): number => Math.round(value * 20) / 20;
-
-/** Screen movement along the lane, in the direction of +z. */
-const alongLane = (layout: DuelLayout, dx: number, dy: number): number =>
-  // Screen-down is +z in portrait; screen-right is -z in landscape.
-  layout === "portrait" ? dy : -dx;
-
-/** Screen movement toward the seam, positive when heading for it. */
-const towardSeam = (
-  layout: DuelLayout,
-  side: -1 | 1,
-  dx: number,
-  dy: number
-): number => {
-  if (layout === "portrait") {
-    return side === -1 ? dx : -dx;
-  }
-  // Stacked: side -1 is the upper phone with the seam below it.
-  return side === -1 ? dy : -dy;
-};
 
 export const useLaneInput = (
   surface: RefObject<HTMLElement | null>,
@@ -84,27 +60,14 @@ export const useLaneInput = (
     }
 
     const gestures = new Map<number, Gesture>();
-    let lastSentAt = 0;
-    let lastTarget = Number.NaN;
+    const sender = createMoveSender((target) => {
+      realtimeStore.duelMove(target);
+    });
 
     const unitsPerPixel = (): number => {
       const extent =
         layout === "portrait" ? element.clientHeight : element.clientWidth;
       return (2 * laneHalfHeight) / Math.max(1, extent);
-    };
-
-    const sendTarget = (target: number, force: boolean): void => {
-      const now = performance.now();
-      const value = quantise(target);
-      if (
-        !force &&
-        (now - lastSentAt < SEND_INTERVAL_MS || value === lastTarget)
-      ) {
-        return;
-      }
-      lastSentAt = now;
-      lastTarget = value;
-      realtimeStore.duelMove(value);
     };
 
     const onPointerDown = (event: PointerEvent): void => {
@@ -133,7 +96,7 @@ export const useLaneInput = (
         return;
       }
       gesture.dragging = true;
-      sendTarget(gesture.startZ + along * unitsPerPixel(), false);
+      sender.send(gesture.startZ + along * unitsPerPixel(), false);
     };
 
     const onRelease = (event: PointerEvent): void => {
@@ -163,7 +126,7 @@ export const useLaneInput = (
       }
       if (gesture.dragging) {
         // Forced: a throttled last move must not leave the player short.
-        sendTarget(gesture.startZ + along * unitsPerPixel(), true);
+        sender.send(gesture.startZ + along * unitsPerPixel(), true);
       }
     };
 

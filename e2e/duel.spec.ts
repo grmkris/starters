@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-import { recordDuelIntent, recordDuelSnapshots } from "./input-frames";
+import {
+  recordDuelCommands,
+  recordDuelIntent,
+  recordDuelSnapshots,
+} from "./input-frames";
 
 // Every duel test waits out a three-second countdown and drives two WebGL
 // pages, and the suite runs several at once; half a minute is not enough on
@@ -240,4 +244,59 @@ test("two strangers waiting are paired", async ({ browser }) => {
 
   await one.context().close();
   await two.context().close();
+});
+
+test("a laptop plays its lane with the keys", async ({ page }) => {
+  const commands = recordDuelCommands(page);
+  const feed = recordDuelSnapshots(page);
+  await page.goto("/duel");
+  await page.getByRole("button", { name: "Play the bot", exact: true }).click();
+  await expect(page).toHaveURL(/\/duel\/[A-Z2-9]{4}$/u);
+  const root = page.getByTestId("duel-root");
+  await expect(root).toHaveAttribute("data-phase", "playing", {
+    timeout: 15_000,
+  });
+
+  // A desktop window is wide, so the lane runs across it, and a mouse means
+  // the keys are worth a hint.
+  await expect(root).toHaveAttribute("data-layout", "landscape");
+  await expect(page.getByTestId("duel-keys")).toContainText("← →");
+
+  // Holding right heads for the right wall, which is -z, at the rules' speed.
+  await page.keyboard.down("ArrowRight");
+  await expect
+    .poll(() =>
+      commands.some(
+        (command) => command.type === "duel.move" && command.move.target < -1
+      )
+    )
+    .toBe(true);
+  await page.keyboard.up("ArrowRight");
+
+  // The server moved a player that way; the bot follows, so at least one.
+  await expect
+    .poll(() =>
+      Math.min(
+        ...(feed.at(-1)?.players.map((player) => player.position.z) ?? [0])
+      )
+    )
+    .toBeLessThan(-0.5);
+
+  // Space is a straight shot; E banks it toward the right, the negative angle.
+  await page.keyboard.press("Space");
+  await expect
+    .poll(() =>
+      commands.some(
+        (command) => command.type === "duel.fire" && command.fire.angle === 0
+      )
+    )
+    .toBe(true);
+  await page.keyboard.press("KeyE");
+  await expect
+    .poll(() =>
+      commands.some(
+        (command) => command.type === "duel.fire" && command.fire.angle < 0
+      )
+    )
+    .toBe(true);
 });

@@ -5,6 +5,7 @@ import {
   FIELD_HALF_WIDTH,
   LANE_HALF_HEIGHT,
   MAX_FIRE_ANGLE,
+  PLAYER_SPEED,
   PLAYER_X,
 } from "@agent-native/game-core";
 
@@ -18,6 +19,7 @@ describe("duel field", () => {
     expect(DUEL_FIELD.halfWidth).toBe(FIELD_HALF_WIDTH);
     expect(DUEL_FIELD.laneHalfHeight).toBe(LANE_HALF_HEIGHT);
     expect(DUEL_FIELD.maxFireAngle).toBe(MAX_FIRE_ANGLE);
+    expect(DUEL_FIELD.playerSpeed).toBe(PLAYER_SPEED);
     expect(DUEL_FIELD.playerX).toBe(PLAYER_X);
   });
 });

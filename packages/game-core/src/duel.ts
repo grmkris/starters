@@ -25,7 +25,7 @@ export const LANE_HALF_HEIGHT = 4.35;
 export const PLAYER_X = 3;
 export const PLAYER_RADIUS = 0.4;
 /** Lane speed toward the requested target, in units per second. */
-const PLAYER_SPEED = 6;
+export const PLAYER_SPEED = 6;
 /** Crosses both lanes, 2 * FIELD_HALF_WIDTH, in 1.2 seconds. */
 export const PROJECTILE_SPEED = (2 * FIELD_HALF_WIDTH) / 1.2;
 const PROJECTILE_RADIUS = 0.12;

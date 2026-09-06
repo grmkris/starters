@@ -143,6 +143,8 @@ export const DUEL_FIELD = {
   halfWidth: 4,
   laneHalfHeight: 4.35,
   maxFireAngle: Math.PI / 3,
+  /** Units per second along the lane, so a key can hold to what the rules allow. */
+  playerSpeed: 6,
   playerX: 3,
 } as const;
 
