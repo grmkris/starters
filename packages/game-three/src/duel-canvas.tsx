@@ -100,7 +100,11 @@ const Lane = ({
   side,
   source,
 }: LaneProps) => {
-  const { width } = useThree((state) => state.size);
+  // Portrait fits the lane's width to the screen's width, so the seam sits
+  // on the side edge; landscape fits the same width to the screen's height,
+  // so the seam sits on the bottom or top edge. Fitting the long axis instead
+  // would push the seam off the screen wherever a header takes some height.
+  const { height, width } = useThree((state) => state.size);
   const laneWidth = field.halfWidth;
   const laneHeight = field.laneHalfHeight * 2;
   const centreX = (side * laneWidth) / 2;
@@ -129,7 +133,7 @@ const Lane = ({
         }}
         position={[centreX, 20, 0]}
         up={layout === "portrait" ? [0, 0, -1] : [-1, 0, 0]}
-        zoom={layout === "portrait" ? width / laneWidth : width / laneHeight}
+        zoom={layout === "portrait" ? width / laneWidth : height / laneWidth}
       />
       <color attach="background" args={[palette.background]} />
       <ambientLight intensity={0.6} />

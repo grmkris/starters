@@ -110,8 +110,9 @@ export const Tank = ({
           colour={colour}
           fallback={
             <>
-              {/* Hull: a three-sided prism, one vertex forward. */}
-              <mesh position={[0, 0.12, 0]} rotation={[0, Math.PI / 6, 0]}>
+              {/* Hull: a three-sided prism. Its first vertex sits at +z, so a turn of
+            -30° about y puts one vertex on +x, the front. */}
+              <mesh position={[0, 0.12, 0]} rotation={[0, -Math.PI / 6, 0]}>
                 <cylinderGeometry args={[0.44, 0.48, 0.24, 3]} />
                 <meshStandardMaterial
                   color={colour}
