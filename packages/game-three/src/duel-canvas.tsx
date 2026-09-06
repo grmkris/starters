@@ -1,11 +1,13 @@
 import { Grid, OrthographicCamera } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useMemo, useRef, useSyncExternalStore } from "react";
-import { Color, Object3D } from "three";
-import type { InstancedMesh, Mesh } from "three";
+import type { Mesh } from "three";
 
 import type { DuelSource } from "./duel-source";
-import { StreakGeometry, StreakMaterial } from "./models/streak";
+import { Muzzle } from "./effects/muzzle";
+import { Seam } from "./effects/seam";
+import { Shots } from "./effects/shots";
+import { Sparks } from "./effects/sparks";
 import { Tank } from "./models/tank";
 import { ObliqueGroup } from "./oblique-group";
 import type { WorldPalette } from "./world-canvas";
@@ -29,19 +31,7 @@ export interface DuelField {
   readonly laneHalfHeight: number;
 }
 
-const MAX_PROJECTILES = 16;
 const FOLLOW_STIFFNESS = 18;
-const PROJECTILE_STIFFNESS = 30;
-
-interface Eased {
-  x: number;
-  z: number;
-}
-
-const ease = (current: Eased, target: Eased, blend: number): void => {
-  current.x += (target.x - current.x) * blend;
-  current.z += (target.z - current.z) * blend;
-};
 
 interface SeamMarkerProps {
   readonly clientId: string;
@@ -70,88 +60,6 @@ const SeamMarker = ({ clientId, palette, source }: SeamMarkerProps) => {
       <boxGeometry args={[0.1, 0.1, 1]} />
       <meshBasicMaterial color={palette.remote} />
     </mesh>
-  );
-};
-
-interface ProjectilesProps {
-  readonly localClientId: string | null;
-  readonly palette: WorldPalette;
-  readonly source: DuelSource;
-}
-
-/**
- * Every shot in flight, as one instanced mesh updated per frame. Shots are
- * born and die at 20 Hz and React must not learn about each one, so the count
- * and matrices are written directly.
- */
-const Projectiles = ({ localClientId, palette, source }: ProjectilesProps) => {
-  const mesh = useRef<InstancedMesh>(null);
-  const eased = useRef(new Map<number, Eased>());
-  const scratch = useMemo(() => new Object3D(), []);
-  const colours = useMemo(
-    () => ({
-      local: new Color(palette.local),
-      remote: new Color(palette.remote),
-    }),
-    [palette.local, palette.remote]
-  );
-
-  useFrame((_state, delta) => {
-    const instanced = mesh.current;
-    if (!instanced) {
-      return;
-    }
-    const shots = source.getProjectiles();
-    const blend = 1 - Math.exp(-PROJECTILE_STIFFNESS * delta);
-    const alive = new Set<number>();
-    let index = 0;
-
-    for (const shot of shots) {
-      if (index >= MAX_PROJECTILES) {
-        break;
-      }
-      alive.add(shot.id);
-      let current = eased.current.get(shot.id);
-      if (current === undefined) {
-        current = { x: shot.position.x, z: shot.position.z };
-        eased.current.set(shot.id, current);
-      } else {
-        ease(current, shot.position, blend);
-      }
-      scratch.position.set(current.x, shot.position.y, current.z);
-      // The box is long along its own x; turn it to follow the velocity.
-      scratch.rotation.set(0, Math.atan2(-shot.velocity.z, shot.velocity.x), 0);
-      scratch.updateMatrix();
-      instanced.setMatrixAt(index, scratch.matrix);
-      instanced.setColorAt(
-        index,
-        shot.ownerId === localClientId ? colours.local : colours.remote
-      );
-      index += 1;
-    }
-
-    for (const id of eased.current.keys()) {
-      if (!alive.has(id)) {
-        eased.current.delete(id);
-      }
-    }
-
-    instanced.count = index;
-    instanced.instanceMatrix.needsUpdate = true;
-    if (instanced.instanceColor) {
-      instanced.instanceColor.needsUpdate = true;
-    }
-  });
-
-  return (
-    <instancedMesh
-      args={[undefined, undefined, MAX_PROJECTILES]}
-      frustumCulled={false}
-      ref={mesh}
-    >
-      <StreakGeometry />
-      <StreakMaterial />
-    </instancedMesh>
   );
 };
 
@@ -207,11 +115,7 @@ const Lane = ({ field, localClientId, palette, side, source }: LaneProps) => {
           sectionColor={palette.gridMajor}
           sectionSize={2}
         />
-        {/* The seam: the edge of this screen and of the other. */}
-        <mesh position={[0, 0, 0]}>
-          <boxGeometry args={[0.06, 0.02, laneHeight]} />
-          <meshBasicMaterial color={palette.local} />
-        </mesh>
+        <Seam laneHeight={laneHeight} palette={palette} source={source} />
         {/* The lane walls a shot banks off. */}
         <mesh position={[centreX, 0.02, -field.laneHalfHeight]}>
           <boxGeometry args={[laneWidth, 0.02, 0.06]} />
@@ -246,7 +150,17 @@ const Lane = ({ field, localClientId, palette, side, source }: LaneProps) => {
             </group>
           );
         })}
-        <Projectiles
+        <Shots
+          localClientId={localClientId}
+          palette={palette}
+          source={source}
+        />
+        <Sparks
+          localClientId={localClientId}
+          palette={palette}
+          source={source}
+        />
+        <Muzzle
           localClientId={localClientId}
           palette={palette}
           source={source}
