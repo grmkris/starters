@@ -5,6 +5,8 @@ import { Color, Object3D } from "three";
 import type { InstancedMesh, Mesh } from "three";
 
 import type { DuelSource } from "./duel-source";
+import { StreakGeometry, StreakMaterial } from "./models/streak";
+import { Tank } from "./models/tank";
 import { ObliqueGroup } from "./oblique-group";
 import type { WorldPalette } from "./world-canvas";
 
@@ -39,41 +41,6 @@ interface Eased {
 const ease = (current: Eased, target: Eased, blend: number): void => {
   current.x += (target.x - current.x) * blend;
   current.z += (target.z - current.z) * blend;
-};
-
-interface DuelistProps {
-  readonly clientId: string;
-  readonly isLocal: boolean;
-  readonly palette: WorldPalette;
-  readonly source: DuelSource;
-}
-
-const Duelist = ({ clientId, isLocal, palette, source }: DuelistProps) => {
-  const mesh = useRef<Mesh>(null);
-
-  useFrame((_state, delta) => {
-    const target = source.getPosition(clientId);
-    if (!(mesh.current && target)) {
-      return;
-    }
-    const blend = 1 - Math.exp(-FOLLOW_STIFFNESS * delta);
-    mesh.current.position.x += (target.x - mesh.current.position.x) * blend;
-    mesh.current.position.z += (target.z - mesh.current.position.z) * blend;
-    mesh.current.position.y = target.y;
-  });
-
-  return (
-    <mesh ref={mesh}>
-      <boxGeometry args={[0.8, 0.6, 0.8]} />
-      <meshStandardMaterial
-        color={isLocal ? palette.local : palette.remote}
-        emissive={isLocal ? palette.localEmissive : palette.remoteEmissive}
-        emissiveIntensity={0.5}
-        metalness={0.3}
-        roughness={0.35}
-      />
-    </mesh>
-  );
 };
 
 interface SeamMarkerProps {
@@ -182,12 +149,8 @@ const Projectiles = ({ localClientId, palette, source }: ProjectilesProps) => {
       frustumCulled={false}
       ref={mesh}
     >
-      <boxGeometry args={[0.5, 0.12, 0.12]} />
-      <meshStandardMaterial
-        emissive={palette.local}
-        emissiveIntensity={0.8}
-        toneMapped={false}
-      />
+      <StreakGeometry />
+      <StreakMaterial />
     </instancedMesh>
   );
 };
@@ -245,7 +208,7 @@ const Lane = ({ field, localClientId, palette, side, source }: LaneProps) => {
           sectionSize={2}
         />
         {/* The seam: the edge of this screen and of the other. */}
-        <mesh position={[0, 0.02, 0]}>
+        <mesh position={[0, 0, 0]}>
           <boxGeometry args={[0.06, 0.02, laneHeight]} />
           <meshBasicMaterial color={palette.local} />
         </mesh>
@@ -258,31 +221,31 @@ const Lane = ({ field, localClientId, palette, side, source }: LaneProps) => {
           <boxGeometry args={[laneWidth, 0.02, 0.06]} />
           <meshBasicMaterial color={palette.gridMajor} />
         </mesh>
-        {roster.map((clientId) =>
-          clientId === localClientId ? (
-            <Duelist
-              clientId={clientId}
-              isLocal
-              key={clientId}
-              palette={palette}
-              source={source}
-            />
-          ) : (
+        {roster.map((clientId) => {
+          const duelist = source.getDuelist(clientId);
+          if (duelist === undefined) {
+            return null;
+          }
+          const isLocal = clientId === localClientId;
+          return (
             <group key={clientId}>
-              <Duelist
+              <Tank
                 clientId={clientId}
-                isLocal={false}
+                isLocal={isLocal}
                 palette={palette}
+                side={duelist.side}
                 source={source}
               />
-              <SeamMarker
-                clientId={clientId}
-                palette={palette}
-                source={source}
-              />
+              {isLocal ? null : (
+                <SeamMarker
+                  clientId={clientId}
+                  palette={palette}
+                  source={source}
+                />
+              )}
             </group>
-          )
-        )}
+          );
+        })}
         <Projectiles
           localClientId={localClientId}
           palette={palette}
