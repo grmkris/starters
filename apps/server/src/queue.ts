@@ -8,7 +8,7 @@
  * the wait has gone on long enough.
  */
 
-export interface Waiter<Entry> {
+interface Waiter<Entry> {
   readonly entry: Entry;
   readonly seconds: number;
 }
