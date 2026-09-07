@@ -1,4 +1,5 @@
 {
+  "revision": "detail-02",
   "blender": "4.5.3 LTS",
   "seed": 19,
   "units": "metres",
@@ -8,7 +9,7 @@
   "source": "assets/zeleno/zeleno.blend",
   "script": "scripts/zeleno/build.py",
   "asset": "container.glb",
-  "bytes": 2820988,
+  "bytes": 5586004,
   "license": "Original project-authored geometry; no third-party assets",
   "movingNodes": [
     "CutawayShell",
@@ -17,6 +18,9 @@
     "DeliveryBox",
     "Packed0",
     "Packed1",
-    "Packed2"
+    "Packed2",
+    "Stock0",
+    "Stock1",
+    "Stock2"
   ]
 }

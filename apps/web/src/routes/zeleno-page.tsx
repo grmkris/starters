@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { useCallback, useMemo, useState } from "react";
+import type { ComponentProps } from "react";
 
 import { useZelenoDemo } from "../hooks/use-zeleno-demo";
 
@@ -36,6 +37,8 @@ const readPalette = (): ZelenoPalette => {
     styles.getPropertyValue(`--zeleno-${name}`).trim();
   return {
     background: token("scene"),
+    night: token("night-scene"),
+    warm: token("warm-light"),
     floor: token("floor"),
     robot: token("robot"),
     steel: token("steel"),
@@ -83,9 +86,35 @@ const statusCopy = {
   complete: "Dober tek! Tvoja škatla je na prevzemnem mestu.",
 };
 
+const details = {
+  overview: {
+    title: "Majhen prostor. Celoten nakup.",
+    note: "Izberi podrobnost in si jo oglej od blizu. Model lahko še vedno vrtiš in približaš.",
+    number: "00",
+  },
+  produce: {
+    title: "Vsak pridelek ima svoje mesto.",
+    note: "Označeni leseni zaboji na dveh nivojih. Odprta sprednja stran omogoča pobiranje, vložki pa se prilagodijo pridelku.",
+    number: "01",
+  },
+  robot: {
+    title: "Po tirnici. Z nežnim prijemom.",
+    note: "Voziček potuje vzdolž polic. Členjena roka dvigne pridelek, mehki prsti pa ga spustijo v škatlo.",
+    number: "02",
+  },
+  pickup: {
+    title: "Zapakirano. Plačano. Prevzeto.",
+    note: "Pakirno mesto s tehtalno ploščo in valjčki. Škatla počaka za zaprtim oknom, dokler ne potrdiš demo plačila.",
+    number: "03",
+  },
+};
+
 export const ZelenoPage = () => {
   const palette = useMemo(() => readPalette(), []);
   const [cutaway, setCutaway] = useState(true);
+  const [evening, setEvening] = useState(false);
+  const [focus, setFocus] =
+    useState<ComponentProps<typeof ZelenoCanvas>["focus"]>("overview");
   const [view, setView] = useState<"perspective" | "front" | "top">(
     "perspective"
   );
@@ -100,6 +129,8 @@ export const ZelenoPage = () => {
   const onError = useCallback(() => {
     setFailed(true);
   }, []);
+  const packed = [6.35, 10.35, 14.35].filter((at) => demo.time >= at).length;
+  const detail = details[focus];
   const activeStep = {
     idle: -1,
     ordering: 0,
@@ -172,6 +203,7 @@ export const ZelenoPage = () => {
   return (
     <main
       className="zeleno"
+      data-focus={focus}
       data-stage={demo.stage}
       data-testid="zeleno-demo"
       data-time={demo.time.toFixed(2)}
@@ -189,7 +221,7 @@ export const ZelenoPage = () => {
         </span>
         <Badge variant="outline">
           <span className="zeleno-live-dot" />
-          Koncept 01
+          Koncept 02
         </Badge>
       </header>
       <section className="zeleno-intro">
@@ -215,7 +247,15 @@ export const ZelenoPage = () => {
               <span className="zeleno-live-dot" />
               PROSTORSKI KONCEPT
             </span>
-            <span>01 / ZELENA PRODAJALNA</span>
+            <label className="zeleno-evening" htmlFor="zeleno-evening">
+              <Switch
+                checked={evening}
+                id="zeleno-evening"
+                onCheckedChange={setEvening}
+                size="sm"
+              />
+              Večerni pogled
+            </label>
           </div>
           <div
             className="zeleno-canvas"
@@ -225,6 +265,9 @@ export const ZelenoPage = () => {
             <ZelenoCanvas
               cameraReset={cameraReset}
               cutaway={cutaway}
+              evening={evening}
+              focus={focus}
+              reducedMotion={reducedMotion}
               onError={onError}
               onReady={onReady}
               palette={palette}
@@ -269,6 +312,7 @@ export const ZelenoPage = () => {
                   next === "top"
                 ) {
                   setView(next);
+                  setFocus("overview");
                   if (next === "top") {
                     setCutaway(true);
                   }
@@ -298,7 +342,12 @@ export const ZelenoPage = () => {
               <Switch
                 id="zeleno-cutaway"
                 checked={cutaway}
-                onCheckedChange={setCutaway}
+                onCheckedChange={(open) => {
+                  setCutaway(open);
+                  if (!open) {
+                    setFocus("overview");
+                  }
+                }}
               />
               Odprti prerez
             </label>
@@ -306,6 +355,8 @@ export const ZelenoPage = () => {
               aria-label="Ponastavi kamero"
               onClick={() => {
                 setCameraReset((value) => value + 1);
+                setFocus("overview");
+                setView("perspective");
               }}
               size="icon"
               variant="ghost"
@@ -314,20 +365,60 @@ export const ZelenoPage = () => {
             </Button>
           </div>
           <div className="zeleno-playback-mobile">{playbackPanel}</div>
-          <div className="zeleno-legend">
-            <span>
-              <i />
-              Police s pridelki
-            </span>
-            <span>
-              <i />
-              Roka na tirnici
-            </span>
-            <span>
-              <i />
-              Naročilo in prevzem
-            </span>
-          </div>
+          <section aria-label="Razišči podrobnosti" className="zeleno-details">
+            <div className="zeleno-details-heading">
+              <p className="zeleno-eyebrow">POGLEJ OD BLIZU</p>
+              <ToggleGroup
+                aria-label="Podrobnosti prodajalne"
+                onValueChange={(values) => {
+                  const [next] = values;
+                  if (
+                    next === "overview" ||
+                    next === "produce" ||
+                    next === "robot" ||
+                    next === "pickup"
+                  ) {
+                    setFocus(next);
+                    setView("perspective");
+                    setCutaway(true);
+                  }
+                }}
+                size="sm"
+                value={[focus]}
+                variant="outline"
+              >
+                <ToggleGroupItem
+                  aria-label="Celotna prodajalna"
+                  value="overview"
+                >
+                  <Cuboid data-icon="inline-start" />
+                  Celota
+                </ToggleGroupItem>
+                <ToggleGroupItem aria-label="Podrobnosti polic" value="produce">
+                  <Sprout data-icon="inline-start" />
+                  Police
+                </ToggleGroupItem>
+                <ToggleGroupItem aria-label="Podrobnosti robota" value="robot">
+                  <MoveUpRight data-icon="inline-start" />
+                  Robot
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  aria-label="Podrobnosti prevzema"
+                  value="pickup"
+                >
+                  <PackageCheck data-icon="inline-start" />
+                  Prevzem
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+            <div aria-live="polite" className="zeleno-detail-copy">
+              <span aria-hidden="true">{detail.number}</span>
+              <div>
+                <h3>{detail.title}</h3>
+                <p>{detail.note}</p>
+              </div>
+            </div>
+          </section>
         </section>
         <aside aria-label="Potek naročila" className="zeleno-story">
           <p className="zeleno-eyebrow">TAKO BI DELOVALO</p>
@@ -371,20 +462,22 @@ export const ZelenoPage = () => {
           </div>
         </div>
         <div className="zeleno-basket">
-          <span>
+          <span data-packed={packed > 0}>
             <i className="zeleno-tomato" />
             1× paradižnik
           </span>
-          <span>
+          <span data-packed={packed > 1}>
             <i className="zeleno-carrot" />
             1× korenček
           </span>
-          <span>
+          <span data-packed={packed > 2}>
             <Leaf aria-hidden="true" />
             1× solata
           </span>
           <ArrowUpRight aria-hidden="true" />
-          <strong>Ena sveža škatla.</strong>
+          <strong aria-live="polite" data-testid="zeleno-basket-progress">
+            {packed} / 3 v škatli
+          </strong>
         </div>
       </section>
       <Separator />

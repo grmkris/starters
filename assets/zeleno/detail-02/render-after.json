@@ -1,0 +1,95 @@
+{
+  "url": "http://127.0.0.1:3260/zeleno",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  },
+  "softwareRenderer": true,
+  "before": {
+    "frames": 3,
+    "calls": 135,
+    "triangles": 275626,
+    "geometries": 89,
+    "textures": 6,
+    "dpr": 1
+  },
+  "idleAdditionalFrames": 0,
+  "samples": [
+    {
+      "threshold": 4.5,
+      "stock": [false, true, true],
+      "packed": [false, false, false],
+      "carried": true,
+      "gripper": [
+        -0.8199568385185172, 1.7880612009311947, -0.35138583592592565
+      ],
+      "image": "frame-01.png",
+      "uiTime": 5.17
+    },
+    {
+      "threshold": 5.2,
+      "stock": [false, true, true],
+      "packed": [true, false, false],
+      "carried": false,
+      "gripper": [0.8191213267264623, 1.749172559418327, -0.05005446333674851],
+      "image": "frame-02.png",
+      "uiTime": 7.37
+    },
+    {
+      "threshold": 6.4,
+      "stock": [false, false, true],
+      "packed": [true, false, false],
+      "carried": true,
+      "gripper": [-1.32, 1.5603390561529291, -0.685],
+      "image": "frame-03.png",
+      "uiTime": 8.47
+    },
+    {
+      "threshold": 8.5,
+      "stock": [false, false, true],
+      "packed": [true, true, false],
+      "carried": false,
+      "gripper": [2.0500000000000003, 1.3519755971264995, 0.25],
+      "image": "frame-04.png",
+      "uiTime": 10.59
+    },
+    {
+      "threshold": 10.4,
+      "stock": [false, false, true],
+      "packed": [true, true, false],
+      "carried": false,
+      "gripper": [0.5539445775999994, 1.7651686341747659, -0.33283825831000036],
+      "image": "frame-05.png",
+      "uiTime": 10.59
+    },
+    {
+      "threshold": 12.5,
+      "stock": [false, false, false],
+      "packed": [true, true, true],
+      "carried": false,
+      "gripper": [1.8271995976746886, 1.58, 0.25],
+      "image": "frame-06.png",
+      "uiTime": 14.2
+    },
+    {
+      "threshold": 14.4,
+      "stock": [false, false, false],
+      "packed": [true, true, true],
+      "carried": false,
+      "gripper": [-0.6000000000000001, 1.58, 0.25],
+      "image": "frame-07.png",
+      "uiTime": 16.62
+    },
+    {
+      "threshold": 18,
+      "stock": [false, false, false],
+      "packed": [true, true, true],
+      "carried": false,
+      "gripper": [-0.6000000000000001, 1.58, 0.25],
+      "image": "frame-08.png",
+      "uiTime": 18
+    }
+  ],
+  "paymentAdditionalFrames": 0,
+  "errors": []
+}

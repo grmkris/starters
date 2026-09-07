@@ -63,6 +63,7 @@ These rules are declared in `tools/graph.ts`. `bun run lint` reports a violating
 
 ## Change discipline
 
+- Work in the shared `dev` branch. Do not create feature branches or additional worktrees unless the user explicitly requests them. Coordinate Git/index operations and shared-file edits with other active agents, preserving their work.
 - Preserve user changes and keep edits inside the requested scope.
 - Prefer the smallest complete vertical slice over placeholder packages or unused infrastructure.
 - Record durable architectural decisions in `docs/decisions/`; do not turn temporary implementation details into permanent rules.

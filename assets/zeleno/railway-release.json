@@ -1,0 +1,70 @@
+{
+  "project": "96f20965-99fe-4312-9aa1-55014742e9ff",
+  "environment": "9ad5b679-bb88-486f-aaa9-9cb39669901f",
+  "service": "04fccc25-9ea9-4500-9958-5f1e0e8d771f",
+  "baselineDeployment": "32172021-1e32-4b0b-8ee3-149a5eb86797",
+  "branch": "dev",
+  "url": "https://field01-production.up.railway.app/zeleno",
+  "files": [
+    {
+      "path": "apps/web/src/routes/zeleno-page.tsx",
+      "sha256": "091868011a9b438d790a799cd8600f60c764517c8ea6712fb75101f1f67db3c4"
+    },
+    {
+      "path": "apps/web/src/hooks/use-zeleno-demo.ts",
+      "sha256": "75993fdc962ddb37208e8e2a6ce713e841578505e438cfa965c632ecbf5c5e6c"
+    },
+    {
+      "path": "packages/game-three/src/zeleno-canvas.tsx",
+      "sha256": "c8e71fa746868e50ba0248791abaddbfe5c38666c5553c1e4c085a078c30c4a5"
+    },
+    {
+      "path": "packages/ui/src/components/switch.tsx",
+      "sha256": "2f95003810c3005f1333aa48fa6b6061aab0e05ccc7d72f133d17d286170d30d"
+    },
+    {
+      "path": "packages/ui/src/components/toggle.tsx",
+      "sha256": "50ce8bd901adc7fa619f43b292d3859482e511a718593f23dae715e5e808529b"
+    },
+    {
+      "path": "packages/ui/src/components/toggle-group.tsx",
+      "sha256": "afb6fbdae3e2745c8e21386f378ee12aaf0267331b6fad1574447c25eb6fc3a4"
+    },
+    {
+      "path": "apps/web/public/zeleno/container.glb",
+      "sha256": "0eb39ae0245f2147135a67d3f2d6e9edfe8a15fa7f124e8d86e7617d1f3e1d54"
+    },
+    {
+      "path": "apps/web/src/router.tsx",
+      "sha256": "f3e09dc0a6a79d4d8a3b3d57e4dda8b0a857c2fb5c57100cefc49ee949737a22"
+    },
+    {
+      "path": "apps/web/src/components/app-shell.tsx",
+      "sha256": "5b74685a6af8ff9c5ee02cbcc9ab114faaf7fc86a5ee9ce729b8f84edcb127c0"
+    },
+    {
+      "path": "packages/game-three/src/index.ts",
+      "sha256": "df0c5faff946d75387a5b5313c9b50c7927f265acd47ed07e6a51772cf6b269e"
+    },
+    {
+      "path": "packages/ui/src/styles/globals.css",
+      "sha256": "c872f27f6c97b2210fb1530008497d0955a943e43a6da1cb803c8e753630c2a7"
+    },
+    {
+      "path": "packages/game-three/src/zeleno-motion.ts",
+      "sha256": "10551f1333fce8eff3900472b1305e69f4ab6b42bcacee53fd8f18f97ee94ca1"
+    }
+  ],
+  "status": "SUCCESS",
+  "verification": {
+    "sharedFastCheck": "passed",
+    "sharedFullCheck": "passed",
+    "releaseFullCheck": "passed",
+    "browserTests": 8,
+    "motionTests": 3,
+    "health": "ok",
+    "liveModelMatches": true
+  },
+  "revision": "detail-02",
+  "deployment": "9828c085-e68d-4822-b820-b38f28de4b3f"
+}

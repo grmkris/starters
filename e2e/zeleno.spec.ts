@@ -119,3 +119,68 @@ test("failed model load offers a working retry", async ({ page }) => {
     page.getByRole("button", { name: "Predvajaj naročilo" })
   ).toBeEnabled();
 });
+
+test("detail views, evening lighting, and packing progress are explorable", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/zeleno");
+  await expect(page.getByTestId("zeleno-scene")).toHaveAttribute(
+    "data-ready",
+    "true"
+  );
+  const canvas = page.getByTestId("zeleno-scene").locator("canvas");
+  const overview = await canvas.screenshot();
+  await page.getByRole("button", { name: "Podrobnosti polic" }).click();
+  await expect(page.getByTestId("zeleno-demo")).toHaveAttribute(
+    "data-focus",
+    "produce"
+  );
+  await expect(
+    page.getByRole("heading", { name: "Vsak pridelek ima svoje mesto." })
+  ).toBeVisible();
+  expect(await canvas.screenshot()).not.toEqual(overview);
+  await page.screenshot({ path: "assets/zeleno/shelves.png" });
+  await page.getByRole("button", { name: "Podrobnosti robota" }).click();
+  await expect(page.getByTestId("zeleno-demo")).toHaveAttribute(
+    "data-focus",
+    "robot"
+  );
+  await page.screenshot({ path: "assets/zeleno/robot.png" });
+  await page.getByRole("button", { name: "Podrobnosti prevzema" }).click();
+  await expect(page.getByTestId("zeleno-demo")).toHaveAttribute(
+    "data-focus",
+    "pickup"
+  );
+  await page.screenshot({ path: "assets/zeleno/pickup.png" });
+  await page.getByRole("button", { name: "Celotna prodajalna" }).click();
+  const daylight = await canvas.screenshot();
+  await page.getByRole("switch", { name: "Večerni pogled" }).click();
+  expect(await canvas.screenshot()).not.toEqual(daylight);
+  await page.screenshot({ path: "assets/zeleno/evening.png" });
+  await page.getByRole("button", { name: "Predvajaj naročilo" }).click();
+  await expect(page.getByTestId("zeleno-demo")).toHaveAttribute(
+    "data-stage",
+    "payment"
+  );
+  await expect(page.getByTestId("zeleno-basket-progress")).toHaveText(
+    "3 / 3 v škatli"
+  );
+  await page.getByRole("button", { name: "Ponastavi prikaz" }).click();
+  await expect(page.getByTestId("zeleno-basket-progress")).toHaveText(
+    "0 / 3 v škatli"
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Podrobnosti robota" }).click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+    390
+  );
+  await page.screenshot({
+    path: "assets/zeleno/mobile-detail.png",
+    fullPage: true,
+  });
+  expect(errors).toEqual([]);
+});

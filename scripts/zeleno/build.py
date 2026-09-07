@@ -36,8 +36,14 @@ M = {name: material(name, color) for name, color in {
     "Leaf": "6b9346", "LeafLight": "94ad59", "Carrot": "e38a38",
     "Potato": "bfa576", "Beet": "8c4966", "Screen": "203e31",
     "Box": "bb8f55", "Ink": "234032", "Ground": "dfddcf",
-    "White": "faf8eb", "Yellow": "ecc957",
+    "White": "faf8eb", "Yellow": "ecc957", "Rubber": "28352d",
+    "Aluminium": "aab4ac", "Soil": "574934", "Vein": "b7c775",
 }.items()}
+
+for name, roughness, metal in [("Steel", .35, .85), ("Aluminium", .28, .95), ("Tomato", .33, 0), ("Screen", .23, 0), ("Orange", .36, 0)]:
+    shader = M[name].node_tree.nodes.get("Principled BSDF")
+    shader.inputs["Roughness"].default_value = roughness
+    shader.inputs["Metallic"].default_value = metal
 
 
 def loc(v):
@@ -72,7 +78,7 @@ def box(name, at, size, mat, bevel=.015, root=None):
 
 
 def sphere(name, at, scale, mat, root=None):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=10, ring_count=6, radius=1, location=loc(at))
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=10, radius=1, location=loc(at))
     obj = bpy.context.object
     obj.name = name
     obj.scale = (scale[0], scale[2], scale[1])
@@ -96,21 +102,71 @@ def text(name, body, at, size, mat, root=None):
     return parent(obj, root)
 
 
+def cylinder(name, a, b, radius, mat, root=None, radius_end=None, vertices=12):
+    av, bv = Vector(loc(a)), Vector(loc(b))
+    bpy.ops.mesh.primitive_cone_add(vertices=vertices, radius1=radius, radius2=radius if radius_end is None else radius_end, depth=(bv-av).length, location=(av+bv)/2)
+    obj = bpy.context.object
+    obj.name = name
+    obj.rotation_euler = (bv-av).to_track_quat("Z", "Y").to_euler()
+    obj.data.materials.append(M[mat])
+    for face in obj.data.polygons:
+        face.use_smooth = len(face.vertices) == 4
+    return parent(obj, root)
+
+
+def leaf(name, at, angle, length, width, lift, mat, root=None):
+    vertices, faces = [], []
+    for row in range(9):
+        t = row / 8
+        for col in range(5):
+            side = (col-2)/2
+            w = math.sin(math.pi*t)**.7 * width * side
+            forward = length*t
+            height = lift*t + .025*math.sin(math.pi*t) + .012*math.sin(t*math.pi*6)*abs(side)
+            vertices.append(loc((at[0]+math.cos(angle)*forward-math.sin(angle)*w, at[1]+height+.012*side*side, at[2]+math.sin(angle)*forward+math.cos(angle)*w)))
+    for row in range(8):
+        for col in range(4):
+            i=row*5+col
+            faces.append((i,i+1,i+6,i+5))
+    mesh=bpy.data.meshes.new(name)
+    mesh.from_pydata(vertices, [], faces)
+    mesh.materials.append(M[mat])
+    obj=bpy.data.objects.new(name,mesh)
+    bpy.context.collection.objects.link(obj)
+    obj.modifiers.new("Leaf thickness", "SOLIDIFY").thickness=.003
+    for face in mesh.polygons: face.use_smooth=True
+    parent(obj,root)
+    return obj
+
+
 def produce(kind, at, root=None, prefix="Produce"):
-    x, y, z = at
+    x,y,z=at
     if kind == "Carrot":
-        body = sphere(prefix, (x, y, z), (.055, .055, .16), "Carrot", root)
-        body.rotation_euler.z = .3
-        sphere(prefix + "Top", (x, y+.04, z-.13), (.075, .035, .08), "Leaf", root)
-    elif kind == "Leaf":
-        sphere(prefix, at, (.13, .105, .13), "Leaf", root)
+        cylinder(prefix+" tapered root", (x,y,z+.16), (x,y,z-.12), .008, "Carrot", root, .052, 14)
+        for i in range(5):
+            leaf(prefix+" frond", (x,y,z-.12), -math.pi/2+(i-2)*.28, .11, .02, .025+i*.009, "Leaf",root)
         for i in range(4):
-            a = i * math.pi / 2
-            sphere(prefix + "Leaf", (x+math.cos(a)*.065, y+.045, z+math.sin(a)*.065), (.075, .075, .08), "LeafLight", root)
+            box(prefix+" root groove", (x,y+.034-i*.004,z-.06+i*.044), (.055-i*.008,.003,.003), "Orange", 0, root)
+    elif kind == "Leaf":
+        sphere(prefix+" heart",(x,y+.045,z),(.073,.072,.072),"LeafLight",root)
+        for i in range(9):
+            angle=i*math.pi*2/9
+            leaf(prefix+" curled leaf", (x,y-.04,z),angle,.125,.06,.03 if i%2 else .07,"Leaf" if i%3==0 else "LeafLight",root)
+            cylinder(prefix+" vein",(x,y-.03,z),(x+math.cos(angle)*.095,y+.02,z+math.sin(angle)*.095),.0025,"Vein",root, .0015,6)
+    elif kind == "Tomato":
+        body=sphere(prefix+" lobed tomato",at,(.097,.079,.097),"Tomato",root)
+        for vertex in body.data.vertices:
+            angle=math.atan2(vertex.co.y,vertex.co.x)
+            bulge=1+.065*math.cos(angle*5)*(1-abs(vertex.co.z)*.7)
+            vertex.co.x*=bulge
+            vertex.co.y*=bulge
+        cylinder(prefix+" stem",(x,y+.06,z),(x+.009,y+.107,z),.009,"Leaf",root,.005,8)
+        for i in range(5):
+            leaf(prefix+" calyx",(x,y+.069,z),i*math.pi*2/5,.065,.012,-.013,"Leaf",root)
     else:
-        sphere(prefix, at, (.09, .078, .09), kind, root)
-        if kind == "Tomato":
-            sphere(prefix + "Stem", (x, y+.07, z), (.048, .02, .045), "Leaf", root)
+        sphere(prefix+" potato",at,(.105,.074,.085),kind,root)
+        for i in range(3):
+            sphere(prefix+" eye",(x+(i-1)*.035,y+.069,z+.018*(i%2)),(.009,.003,.005),"Wood",root)
 
 
 cutaway = group("CutawayShell")
@@ -165,6 +221,8 @@ for x in [-2.78, -1.5, -.2, 1.12]:
     box("Rack upright", (x, 1.09, -.99), (.065, 1.92, .065), "Cream")
 for y in [.44, 1.14]:
     box("Rack shelf", (-.83, y, -.81), (4.02, .07, .65), "Wood")
+    box("Shelf LED channel", (-.83,y-.055,-.53),(4,.026,.032),"Aluminium",.004)
+    box("Shelf light diffuser",(-.83,y-.07,-.53),(3.9,.006,.024),"White",.002)
     for col, kind in enumerate(["Tomato", "Carrot", "Leaf", "Potato"]):
         x = -2.29 + col*.97
         box("Crate base", (x, y+.065, -.79), (.85, .045, .54), "Crate")
@@ -175,21 +233,42 @@ for y in [.44, 1.14]:
             box("Crate end", (x+sx, y+.145, -.79), (.035, .22, .56), "Wood")
         box("Bin label", (x, y+.16, -.499), (.28, .095, .008), "Cream", .003)
         text("Produce label", ["PARADIZNIK", "KORENJE", "SOLATA", "KROMPIR"][col], (x, y+.148, -.493), .028, "Ink")
+        text("Bin number", f"{'B' if y<1 else 'A'}{col+1}", (x-.32,y+.15,-.491),.042,"Ink")
+        for sx in [-.36,.36]:
+            for offset in [.11,.22]:
+                cylinder("Crate screw",(x+sx,y+offset,-.505),(x+sx,y+offset,-.499),.008,"Steel",vertices=8)
         for i in range(6):
-            produce(kind, (x+(i%3-1)*.23, y+.18, -.8+(i//3-.5)*.23))
+            at=(x+(i%3-1)*.23,y+.18,-.8+(i//3-.5)*.23)
+            if y>1 and col<3 and i==4:
+                stock=group("Stock"+str(col))
+                stock.location=loc(at)
+                produce(kind,(0,0,0),stock)
+            else:
+                produce(kind,at)
 text("Interior lettering", "LOKALNO. SEZONSKO. DOBRO.", (-.9, 1.98, -1.08), .115, "Cream")
 
 # Rails and a clear aisle to the packing station.
 for z in [-.12, .18]:
-    box("Overhead linear rail", (0, 2.31, z), (5.65, .09, .065), "Steel", .008)
+    box("Overhead linear rail", (0, 2.31, z), (5.65, .09, .065), "Aluminium", .008)
+    box("Rail linear bearing groove",(0,2.32,z+.035),(5.52,.022,.01),"Rubber",.002)
+    for x in [-2.7,-2,-1,0,1,2,2.7]:
+        cylinder("Rail mounting bolt",(x,2.36,z),(x,2.371,z),.017,"Steel",vertices=6)
 for x in [-2.6, 2.6]:
     box("Rail hanger", (x, 2.44, .03), (.075, .27, .47), "Cream")
 box("Packing bench", (2.07, .77, .23), (1.28, .1, 1.02), "Cream", .025)
 for x in [1.53, 2.61]:
     for z in [-.18, .63]:
         box("Bench leg", (x, .43, z), (.075, .67, .075), "Steel")
-for z in [0, .2, .4, .6, .8, 1, 1.2, 1.4]:
-    box("Conveyor roller", (2.07, .835, z), (1.05, .045, .085), "Steel")
+for z in [i*.115 for i in range(14)]:
+    cylinder("Conveyor roller",(1.56,.835,z),(2.58,.835,z),.038,"Aluminium",vertices=16)
+for x in [1.52,2.62]:
+    box("Conveyor side channel",(x,.805,.72),(.055,.11,1.72),"Steel")
+    for z in [.03,.48,.93,1.38]:
+        cylinder("Roller shaft",(x-.035,.835,z),(x+.035,.835,z),.016,"Rubber",vertices=8)
+box("Scale platform",(2.07,.845,.25),(.82,.018,.64),"Aluminium",.008)
+box("Scale readout housing",(2.67,.88,-.11),(.2,.15,.16),"Steel")
+box("Scale display",(2.67,.9,-.021),(.15,.07,.009),"Screen",.003)
+text("Scale units","kg",(2.67,.875,-.014),.04,"LeafLight")
 delivery = group("DeliveryBox")
 box("Box base", (2.07, .87, .25), (.77, .06, .58), "Box", .006, delivery)
 for x in [1.7, 2.44]:
@@ -202,12 +281,56 @@ for i, kind in enumerate(["Tomato", "Carrot", "Leaf"]):
     packed.parent = delivery
     produce(kind, (1.83+i*.22, 1.065, .25), packed)
 
-for x in [-3.57, 3.57]:
-    box("Herb planter", (x, .15, 1.52), (.53, .4, .58), "Forest", .025)
-    for i in range(8):
-        sphere("Herb foliage", (x+random.uniform(-.17, .17), .48+random.uniform(0, .19), 1.52+random.uniform(-.2, .2)), (.14, .24, .12), "Leaf" if i%2 else "LeafLight")
+for x in [-3.57,3.57]:
+    box("Herb planter",(x,.15,1.52),(.53,.4,.58),"Forest",.025)
+    box("Planter soil",(x,.354,1.52),(.46,.008,.51),"Soil",.01)
+    for i in range(18):
+        angle=i*2.4
+        at=(x+math.cos(angle)*.085,.36,1.52+math.sin(angle)*.085)
+        leaf("Herb leaf",at,angle,.2+(i%3)*.035,.05,.16+(i%4)*.055,"Leaf" if i%2 else "LeafLight")
 for x in [-3.2, -1.6, 0, 1.6, 3.2]:
     box("Forecourt paving", (x, -.075, 2.2), (1.5, .025, .74), "Cream", .02)
+
+# Visible construction details for the close-up inspection views.
+for x in [-2.78,-1.5,-.2,1.12]:
+    for y in [.46,1.16]:
+        box("Shelf bracket",(x,y-.1,-.82),(.045,.16,.39),"Aluminium",.006)
+    for y in [.3,.7,1.5,1.85]:
+        box("Rack adjustment slot",(x, y,-.952),(.019,.05,.007),"Steel",.003)
+box("Cable tray",(0,2.41,-.23),(5.5,.065,.13),"Steel",.008)
+for i in range(38):
+    box("Cable chain rib",(-2.65+i*.14,2.454,-.23),(.055,.025,.14),"Rubber",.003)
+for x in [-2.77,2.77]:
+    box("Rail limit switch",(x,2.26,.035),(.09,.09,.13),"Orange",.008)
+    cylinder("Rail end buffer",(x,2.22,-.02),(x,2.22,.09),.024,"Rubber")
+box("Service module",(2.15,1.93,-1.025),(1.21,.6,.24),"Cream",.035)
+for i in range(10):
+    box("Ventilation louver",(2.3,1.73+i*.042,-.891),(.63,.014,.017),"Steel",.003)
+text("Service module label","SERVIS",(1.78,1.92,-.887),.055,"Forest")
+box("Cable conduit",(2.85,1.25,-1.075),(.045,2.12,.045),"Aluminium",.005)
+for y in [.39,1.14,2.04]:
+    box("Conduit clip",(2.85,y,-1.047),(.09,.04,.024),"Steel",.004)
+box("Bench lower shelf",(2.07,.31,.2),(1.1,.045,.85),"Wood")
+for i in range(5):
+    box("Flat packed spare box",(2.06,.35+i*.04,.15),(.86,.032,.54),"Box",.007)
+for x in [1.31,2.87]:
+    box("Shutter guide",(x,1.3,1.286),(.035,1.02,.033),"Aluminium",.004)
+box("Pickup status light",(2.1,1.831,1.284),(1.12,.023,.018),"LeafLight",.004)
+box("Pickup lip",(2.1,.864,1.69),(1.72,.03,.035),"Aluminium",.006)
+for i in range(5):
+    cylinder("Microphone perforation",(.62+i*.04,1.21,1.335),(.62+i*.04,1.21,1.344),.006,"Rubber",vertices=8)
+for i in range(3):
+    box("Payment key",(.65+i*.05,.916,1.398),(.032,.024,.005),"Cream",.003)
+text("Terminal payment label","PRISLONI",(.7,.821,1.326),.035,"Forest")
+box("Canopy",(.0,2.61,1.64),(6.18,.065,.87),"Cream",.02,roof)
+for x in [-2.85,2.85]:
+    cylinder("Canopy stay",(x,2.31,1.23),(x,2.57,2.03),.023,"Steel",roof)
+for i in range(29):
+    box("Roof rib",(-2.92+i*.21,2.705,0),(.075,.027,2.42),"Sage",.007,roof)
+text("Facade subline","PRIDELANO BLIZU. NA VOLJO VEDNO.",(-1.1,.84,1.283),.06,"Cream",cutaway)
+for x in [-2.9,2.9]:
+    cylinder("Door hinge",(x,.39,1.302),(x,.53,1.302),.022,"Aluminium",cutaway)
+    cylinder("Door hinge",(x,1.8,1.302),(x,1.94,1.302),.022,"Aluminium",cutaway)
 
 # A matching rest-pose robot is retained in the editable source. Browser motion
 # owns its procedural articulated links, so the preview collection is not exported.
@@ -256,6 +379,6 @@ for obj in bpy.context.scene.objects:
     if not obj.name.startswith("Preview"):
         obj.select_set(True)
 bpy.ops.export_scene.gltf(filepath=str(PUBLIC / "container.glb"), export_format="GLB", use_selection=True, export_apply=True, export_yup=True, export_animations=False, export_cameras=False, export_lights=False)
-manifest = {"blender": bpy.app.version_string, "seed": 19, "units": "metres", "up": "+Y", "front": "+Z", "container": [6, 2.6, 2.4], "source": "assets/zeleno/zeleno.blend", "script": "scripts/zeleno/build.py", "asset": "container.glb", "bytes": (PUBLIC / "container.glb").stat().st_size, "license": "Original project-authored geometry; no third-party assets", "movingNodes": ["CutawayShell", "Roof", "PickupHatch", "DeliveryBox", "Packed0", "Packed1", "Packed2"]}
+manifest = {"revision": "detail-02", "blender": bpy.app.version_string, "seed": 19, "units": "metres", "up": "+Y", "front": "+Z", "container": [6, 2.6, 2.4], "source": "assets/zeleno/zeleno.blend", "script": "scripts/zeleno/build.py", "asset": "container.glb", "bytes": (PUBLIC / "container.glb").stat().st_size, "license": "Original project-authored geometry; no third-party assets", "movingNodes": ["CutawayShell", "Roof", "PickupHatch", "DeliveryBox", "Packed0", "Packed1", "Packed2", "Stock0", "Stock1", "Stock2"]}
 (SOURCE / "manifest.json").write_text(json.dumps(manifest, indent=2)+"\n")
 print(json.dumps(manifest), flush=True)

@@ -1,0 +1,117 @@
+{
+  "url": "https://field01-production.up.railway.app/zeleno",
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  },
+  "softwareRenderer": true,
+  "before": {
+    "frames": 1,
+    "calls": 61,
+    "triangles": 115498,
+    "geometries": 31,
+    "textures": 3,
+    "dpr": 1
+  },
+  "idleAdditionalFrames": 0,
+  "samples": [
+    {
+      "time": "4.62",
+      "stats": {
+        "calls": 63,
+        "triangles": 115834,
+        "geometries": 32,
+        "textures": 3,
+        "dpr": 1
+      },
+      "stock": [null, null, null],
+      "packed": [false, false, false]
+    },
+    {
+      "time": "5.97",
+      "stats": {
+        "calls": 63,
+        "triangles": 115834,
+        "geometries": 32,
+        "textures": 3,
+        "dpr": 1
+      },
+      "stock": [null, null, null],
+      "packed": [false, false, false]
+    },
+    {
+      "time": "6.62",
+      "stats": {
+        "calls": 65,
+        "triangles": 115898,
+        "geometries": 34,
+        "textures": 3,
+        "dpr": 1
+      },
+      "stock": [null, null, null],
+      "packed": [true, false, false]
+    },
+    {
+      "time": "8.52",
+      "stats": {
+        "calls": 67,
+        "triangles": 115946,
+        "geometries": 35,
+        "textures": 3,
+        "dpr": 1
+      },
+      "stock": [null, null, null],
+      "packed": [true, false, false]
+    },
+    {
+      "time": "10.49",
+      "stats": {
+        "calls": 69,
+        "triangles": 116298,
+        "geometries": 37,
+        "textures": 3,
+        "dpr": 1
+      },
+      "stock": [null, null, null],
+      "packed": [true, true, false]
+    },
+    {
+      "time": "12.92",
+      "stats": {
+        "calls": 71,
+        "triangles": 116458,
+        "geometries": 38,
+        "textures": 3,
+        "dpr": 1
+      },
+      "stock": [null, null, null],
+      "packed": [true, true, false]
+    },
+    {
+      "time": "14.80",
+      "stats": {
+        "calls": 73,
+        "triangles": 117298,
+        "geometries": 40,
+        "textures": 3,
+        "dpr": 1
+      },
+      "stock": [null, null, null],
+      "packed": [true, true, true]
+    },
+    {
+      "time": "18.00",
+      "stats": {
+        "calls": 73,
+        "triangles": 117298,
+        "geometries": 40,
+        "textures": 3,
+        "dpr": 1
+      },
+      "stock": [null, null, null],
+      "packed": [true, true, true]
+    }
+  ],
+  "paymentAdditionalFrames": 0,
+  "errors": []
+}
