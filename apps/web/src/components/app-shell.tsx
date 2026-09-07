@@ -65,7 +65,8 @@ const RuntimeShell = () => {
 
 export const AppShell = () => {
   const immersive = useRouterState({
-    select: (state) => state.location.pathname === "/dinorace",
+    select: (state) =>
+      ["/dinorace", "/zeleno"].includes(state.location.pathname),
   });
   return immersive ? <Outlet /> : <RuntimeShell />;
 };

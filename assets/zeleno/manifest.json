@@ -1,0 +1,22 @@
+{
+  "blender": "4.5.3 LTS",
+  "seed": 19,
+  "units": "metres",
+  "up": "+Y",
+  "front": "+Z",
+  "container": [6, 2.6, 2.4],
+  "source": "assets/zeleno/zeleno.blend",
+  "script": "scripts/zeleno/build.py",
+  "asset": "container.glb",
+  "bytes": 2820988,
+  "license": "Original project-authored geometry; no third-party assets",
+  "movingNodes": [
+    "CutawayShell",
+    "Roof",
+    "PickupHatch",
+    "DeliveryBox",
+    "Packed0",
+    "Packed1",
+    "Packed2"
+  ]
+}

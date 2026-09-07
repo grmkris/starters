@@ -51,7 +51,17 @@ const dinoRaceRoute = createRoute({
   path: "/dinorace",
 });
 
+const zelenoRoute = createRoute({
+  component: lazyRouteComponent(
+    async () => await import("./routes/zeleno-page"),
+    "ZelenoPage"
+  ),
+  getParentRoute: () => rootRoute,
+  path: "/zeleno",
+});
+
 const routeTree = rootRoute.addChildren([
+  zelenoRoute,
   dinoRaceRoute,
   indexRoute,
   architectureRoute,

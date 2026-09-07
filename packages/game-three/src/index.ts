@@ -24,3 +24,6 @@ export { OBLIQUE_K, ObliqueGroup } from "./oblique-group";
 export { defaultWorldFeel, WorldCanvas } from "./world-canvas";
 export type { WorldFeel, WorldPalette } from "./world-canvas";
 export type { WorldSource } from "./world-source";
+
+export { ZelenoCanvas } from "./zeleno-canvas";
+export type { ZelenoPalette, ZelenoSource } from "./zeleno-canvas";
